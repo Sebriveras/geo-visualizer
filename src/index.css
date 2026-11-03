@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+/* Los controles inferiores de Mapbox quedan por encima de la barra de información */
+.mapboxgl-map .mapboxgl-ctrl-bottom-left,
+.mapboxgl-map .mapboxgl-ctrl-bottom-right {
+  bottom: 2rem;
+}

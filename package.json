@@ -1,0 +1,26 @@
+{
+  "name": "kmz-visualizer",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@dnd-kit/dom": "^0.5.3",
+    "@dnd-kit/react": "^0.5.3",
+    "@tailwindcss/vite": "^4.3.3",
+    "@turf/area": "^7.4.0",
+    "@turf/distance": "^7.4.0",
+    "lucide-preact": "^1.66.0",
+    "mapbox-gl": "^3.34.2",
+    "preact": "^11.0.2",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "vite": "^8.3.5"
+  }
+}

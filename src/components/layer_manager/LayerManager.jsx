@@ -6,6 +6,7 @@ import { DoorOpen, Folder, MapPin, Pencil, Spline, Trash2, TreePine, UtilityPole
 import { Layer } from './Layer'
 import { LayersActionPanel } from './LayersActionPanel'
 import { LayerHeader } from './LayerHeader'
+import { ConfirmDialog } from '../dialog/ConfirmDialog'
 import { DropdownMenu, MenuDivider, MenuItem } from '../menu/DropdownMenu'
 import { useLayers } from '../../context/LayersContext'
 
@@ -125,6 +126,8 @@ export function LayerManger () {
     const { layers, activeId, collapsed, openLayer, startEditing, deleteLayer, toggleFolder, toggleVisible, moveLayer } = useLayers()
     // { id, anchor }: capa con el menú abierto y el botón elipsis que lo abrió
     const [menu, setMenu] = useState(null)
+    // Capa que se está por borrar, a la espera de confirmación
+    const [deleting, setDeleting] = useState(null)
 
     // Arrastre desde el grip: `drop` es el destino bajo el puntero y `draggedId` la capa en movimiento
     const [draggedId, setDraggedId] = useState(null)
@@ -211,8 +214,22 @@ export function LayerManger () {
                 <DropdownMenu anchor={menu.anchor} onClose={() => setMenu(null)}>
                     <MenuItem icon={Pencil} onClick={() => runAction(startEditing)}>Editar</MenuItem>
                     <MenuDivider/>
-                    <MenuItem icon={Trash2} tone="danger" onClick={() => runAction(deleteLayer)}>Borrar</MenuItem>
+                    <MenuItem icon={Trash2} tone="danger" onClick={() => runAction((id) => setDeleting(flat.find(({ layer }) => layer.id === id).layer))}>Borrar</MenuItem>
                 </DropdownMenu>
+            )}
+
+            {deleting && (
+                <ConfirmDialog
+                    title={deleting.children ? 'Eliminar carpeta' : 'Eliminar capa'}
+                    message={deleting.children?.length > 0
+                        ? `¿Deseas eliminar la carpeta ${deleting.name} y todo su contenido?`
+                        : `¿Deseas eliminar ${deleting.children ? 'la carpeta' : 'la capa'} ${deleting.name}?`}
+                    onCancel={() => setDeleting(null)}
+                    onConfirm={() => {
+                        deleteLayer(deleting.id)
+                        setDeleting(null)
+                    }}
+                />
             )}
         </div>
     )

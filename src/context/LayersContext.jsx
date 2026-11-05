@@ -166,7 +166,7 @@ function targetParentId (layers, activeId) {
 }
 
 // draft = { name, observation, color?, icon? }; una observación vacía equivale a no tener observación
-function commitInto (layers, id, { name, observation, color, icon }) {
+function commitInto (layers, id, { name, observation, color, icon, images }) {
     const layer = findNode(layers, id)
     const fallback = DEFAULT_NAMES[layer.children ? 'folder' : layer.type]
     const finalName = uniqueName(findSiblings(layers, id), name.trim() || fallback, id)
@@ -175,12 +175,13 @@ function commitInto (layers, id, { name, observation, color, icon }) {
         name: finalName,
         observation: observation.trim(),
         ...(color !== undefined && { color }),
-        ...(icon !== undefined && { icon })
+        ...(icon !== undefined && { icon }),
+        ...(images !== undefined && { images })
     }))
 }
 
 // Una capa en creación no entra al árbol hasta que se guarda o se cancela en edición
-function commitPending (layers, shape, { name, observation, color, icon }) {
+function commitPending (layers, shape, { name, observation, color, icon, images }) {
     const { parentId, ...layer } = shape
     const siblings = parentId === null ? layers : findNode(layers, parentId).children
     return addChild(layers, parentId, {
@@ -188,7 +189,8 @@ function commitPending (layers, shape, { name, observation, color, icon }) {
         name: uniqueName(siblings, name.trim() || DEFAULT_NAMES[shape.type]),
         observation: observation.trim(),
         ...(color !== undefined && { color }),
-        ...(icon !== undefined && { icon })
+        ...(icon !== undefined && { icon }),
+        ...(images !== undefined && { images })
     })
 }
 

@@ -5,7 +5,7 @@ export function Footer({ icon, label, onClick, variant = 'tonal' }){
     const Button = variant === 'outline' ? OutlineButton : TonalButton
 
     return(
-        <div class="flex w-full items-center justify-end gap-2 p-3">
+        <div class="flex w-full shrink-0 items-center justify-end gap-2 p-3">
             <Button leadingIcon={icon} onClick={onClick}>{label}</Button>
         </div>
     )

@@ -5,22 +5,25 @@ import "mapbox-gl/dist/mapbox-gl.css"
 import { InfoSection } from "./InfoSection"
 import { FloatingSection } from "./FloatingSection"
 import { useLayers } from "../../context/LayersContext"
-import { useMap } from "../../context/MapContext"
+import { setCursorLocation, useMap } from "../../context/MapContext"
 import { findIcon } from "../map_panel/IconPicker"
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN
 
-// Satelital con calles y relieve 3D; vista inicial en la zona del diseño, inclinada para apreciar el terreno
+// Satelital con calles y relieve; vista inicial en la zona del diseño, en 2D (sin inclinar ni rotar), aunque se puede inclinar
 const MAP_OPTIONS = {
     style: 'mapbox://styles/mapbox/satellite-streets-v12',
     center: [-77.9425, 0.5525],
     zoom: 15.5,
-    pitch: 60,
-    bearing: -20,
+    pitch: 0,
+    bearing: 0,
     maxPitch: 80,
     antialias: true
 }
 const TERRAIN_EXAGGERATION = 1.3
+
+// Grosor del trazo (px). Cada forma puede traer su `width` para personalizarlo; si no, se usa este
+const DEFAULT_WIDTH = 1.5
 
 const SHAPES = 'kmz-shapes'
 const HANDLES = 'kmz-handles'
@@ -32,13 +35,42 @@ const toLngLat = ({ lng, lat }) => ({ lng, lat })
 const coordinates = (points) => points.map(({ lng, lat }) => [lng, lat])
 const emptyCollection = { type: 'FeatureCollection', features: [] }
 
-// Líneas y polígonos como GeoJSON; `trail` = coordenada hacia la que se estira el último tramo mientras se traza
+const CIRCLE_STEPS = 128
+const EARTH_RADIUS = 6371008.8
+
+// Anillo de la circunferencia geodésica de centro `center` que pasa por `edge`
+function circleRing (center, edge) {
+    const radius = new mapboxgl.LngLat(center.lng, center.lat).distanceTo(new mapboxgl.LngLat(edge.lng, edge.lat)) / EARTH_RADIUS
+    const lat = center.lat * Math.PI / 180
+    const lng = center.lng * Math.PI / 180
+
+    const ring = Array.from({ length: CIRCLE_STEPS }, (_, step) => {
+        const bearing = 2 * Math.PI * step / CIRCLE_STEPS
+        const pointLat = Math.asin(Math.sin(lat) * Math.cos(radius) + Math.cos(lat) * Math.sin(radius) * Math.cos(bearing))
+        const pointLng = lng + Math.atan2(Math.sin(bearing) * Math.sin(radius) * Math.cos(lat), Math.cos(radius) - Math.sin(lat) * Math.sin(pointLat))
+        return [pointLng * 180 / Math.PI, pointLat * 180 / Math.PI]
+    })
+    return [...ring, ring[0]]
+}
+
+// Líneas, polígonos y circunferencias como GeoJSON; `trail` = coordenada hacia la que se estira el último tramo mientras se traza
 function shapeFeatures (shapes, trail) {
-    return shapes.flatMap(({ id, type, points, color, handles }) => {
+    return shapes.flatMap(({ id, type, points, color, handles, width = DEFAULT_WIDTH }) => {
         if (type === 'point') return []
 
+        const properties = { id, color, width }
+
+        // Circunferencia: centro + punto del borde (o el cursor mientras se elige); se dibuja el círculo y su radio
+        if (type === 'circle') {
+            const edge = points[1] ?? (handles && trail)
+            if (!points[0] || !edge) return []
+            return [
+                { type: 'Feature', properties, geometry: { type: 'Polygon', coordinates: [circleRing(points[0], edge)] } },
+                { type: 'Feature', properties, geometry: { type: 'LineString', coordinates: coordinates([points[0], edge]) } }
+            ]
+        }
+
         const path = handles && trail && points.length > 0 ? [...points, trail] : points
-        const properties = { id, color }
 
         if (type === 'polygon' && points.length >= 3) {
             return [{ type: 'Feature', properties, geometry: { type: 'Polygon', coordinates: [[...coordinates(points), [points[0].lng, points[0].lat]]] } }]
@@ -52,7 +84,8 @@ function shapeFeatures (shapes, trail) {
 function handleFeatures (shapes) {
     return shapes.flatMap(({ id, type, points, color, handles, movable }) => {
         if (type === 'point' || !handles) return []
-        return points.map((point, index) => ({
+        // En la circunferencia solo se marca el centro
+        return (type === 'circle' ? points.slice(0, 1) : points).map((point, index) => ({
             type: 'Feature',
             properties: { id, index, color, movable },
             geometry: { type: 'Point', coordinates: [point.lng, point.lat] }
@@ -78,22 +111,14 @@ function addMapContent (map) {
         type: 'fill',
         source: SHAPES,
         filter: ['==', ['geometry-type'], 'Polygon'],
-        paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.25 }
-    })
-    // Contorno blanco bajo cada trazo para que se distinga sobre la imagen satelital
-    map.addLayer({
-        id: 'kmz-line-casing',
-        type: 'line',
-        source: SHAPES,
-        layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#ffffff', 'line-width': 6, 'line-opacity': 0.7 }
+        paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.15 }
     })
     map.addLayer({
         id: 'kmz-line',
         type: 'line',
         source: SHAPES,
         layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': ['get', 'color'], 'line-width': 3 }
+        paint: { 'line-color': ['get', 'color'], 'line-width': ['get', 'width'] }
     })
     map.addLayer({
         id: HANDLES,
@@ -104,7 +129,7 @@ function addMapContent (map) {
 }
 
 export function MapSection(){
-    const { placingPoints, insertingPoints, pointCount, mapClick, movePoint, mapShapes } = useLayers()
+    const { placingPoints, insertingPoints, pointCount, mapClick, movePoint, beginMove, mapShapes, openLayer, panel } = useLayers()
     const { setMap } = useMap()
     const containerRef = useRef(null)
     const mapRef = useRef(null)
@@ -119,7 +144,7 @@ export function MapSection(){
 
     // Los listeners del mapa se registran una sola vez; leen siempre lo último desde aquí
     const latest = useRef({})
-    latest.current = { mapClick, movePoint, placingPoints, insertingPoints }
+    latest.current = { mapClick, movePoint, beginMove, placingPoints, insertingPoints, openLayer, panel }
 
     useEffect(() => {
         if (!TOKEN) return
@@ -138,23 +163,51 @@ export function MapSection(){
             setReady(true)
         })
 
+        // Abre el panel de la línea o polígono bajo el cursor (con un margen para alcanzar los trazos finos);
+        // la forma que se está editando se ignora: ahí el clic agrega vértices
+        const shapeAt = (point) => {
+            const box = [[point.x - 5, point.y - 5], [point.x + 5, point.y + 5]]
+            const { panel } = latest.current
+            const editing = panel?.mode === 'edit' ? panel.layerId : null
+            return map.queryRenderedFeatures(box, { layers: ['kmz-line', 'kmz-fill'] })
+                .map((feature) => feature.properties.id)
+                .find((id) => id !== 'measure' && id !== editing)
+        }
+        const openShapeAt = (point) => {
+            const id = shapeAt(point)
+            if (id === undefined) return false
+            latest.current.openLayer(id)
+            return true
+        }
+
         map.on('click', (event) => {
             if (justDraggedRef.current) return
             if (map.queryRenderedFeatures(event.point, { layers: [HANDLES] }).length > 0) return
+            if (!latest.current.placingPoints && openShapeAt(event.point)) return
             latest.current.mapClick(toLngLat(event.lngLat))
         })
 
         map.on('mousemove', (event) => {
             if (dragRef.current) return latest.current.movePoint(dragRef.current.id, dragRef.current.index, toLngLat(event.lngLat))
-            if (latest.current.placingPoints) setCursor({ x: event.point.x, y: event.point.y, ...toLngLat(event.lngLat) })
+            setCursorLocation(toLngLat(event.lngLat))
+            if (latest.current.placingPoints) {
+                return setCursor({ x: event.point.x, y: event.point.y, ...toLngLat(event.lngLat) })
+            }
+            if (!map.isMoving() && !latest.current.insertingPoints) {
+                map.getCanvas().style.cursor = shapeAt(event.point) === undefined ? '' : 'pointer'
+            }
         })
-        map.on('mouseout', () => setCursor(null))
+        map.on('mouseout', () => {
+            setCursor(null)
+            setCursorLocation(null)
+        })
 
         // Arrastrar vértices: mientras dura, el mapa no se desplaza
         const startDrag = (event) => {
             const { id, index, movable } = event.features[0].properties
             if (movable !== true && movable !== 'true') return
             event.preventDefault()
+            latest.current.beginMove(id)
             dragRef.current = { id, index }
             map.dragPan.disable()
         }
@@ -229,6 +282,7 @@ export function MapSection(){
                 const marker = new mapboxgl.Marker({ element, anchor: 'center', offset: MARKER_OFFSET })
                     .setLngLat([points[0].lng, points[0].lat])
                     .addTo(map)
+                marker.on('dragstart', () => latest.current.beginMove(id))
                 marker.on('drag', () => latest.current.movePoint(id, 0, toLngLat(marker.getLngLat())))
                 entry = { marker, element }
                 markers.set(id, entry)
@@ -236,9 +290,14 @@ export function MapSection(){
 
             entry.marker.setLngLat([points[0].lng, points[0].lat])
             entry.marker.setDraggable(movable)
-            // Solo se puede tocar el icono en edición: así no tapa los clics que colocan puntos
-            entry.element.style.pointerEvents = movable ? 'auto' : 'none'
-            entry.element.style.cursor = movable ? 'move' : ''
+            // El icono se toca para abrir su panel, salvo al trazar o insertar vértices: ahí no debe tapar esos clics
+            const clickable = movable || !(placingPoints || insertingPoints)
+            entry.element.style.pointerEvents = clickable ? 'auto' : 'none'
+            entry.element.style.cursor = movable ? 'move' : clickable ? 'pointer' : ''
+            entry.element.onclick = (event) => {
+                event.stopPropagation()
+                latest.current.openLayer(id)
+            }
             render(h(findIcon(icon).component, {}), entry.element)
         })
 
@@ -248,7 +307,7 @@ export function MapSection(){
             render(null, element)
             markers.delete(id)
         })
-    }, [ready, mapShapes])
+    }, [ready, mapShapes, placingPoints, insertingPoints])
 
     return(
         <div class="relative w-full flex-1 min-h-0 bg-slate-600">

@@ -9,7 +9,9 @@ import { DEFAULT_ICON } from '../components/map_panel/IconPicker'
 const DEFAULT_FOLDER_NAME = 'Nueva carpeta'
 const DEFAULT_NAMES = { folder: DEFAULT_FOLDER_NAME, point: 'Nuevo punto', line: 'Nueva línea', polygon: 'Nuevo polígono' }
 // Puntos con los que la forma se cierra y pasa directo a edición
-const AUTO_EDIT_POINTS = { point: 1, polygon: 3 }
+const AUTO_EDIT_POINTS = { point: 1, line: 2, polygon: 3 }
+// Puntos mínimos para que la forma exista; con menos, un trazado nuevo vuelve a la fase de trazar
+const MIN_POINTS = { point: 1, line: 2, polygon: 3 }
 
 // Las mediciones siempre van en negro
 const MEASURE_COLOR = '#0f172b'
@@ -130,6 +132,8 @@ function polygonArea (points) {
 function measureOf (type, points) {
     if (type === 'polygon') return { area: polygonArea(points), perimeter: pathLength(points, true) }
     if (type === 'point') return {}
+    // Circunferencia: puntos = centro y borde, así que el diámetro es el doble de esa distancia
+    if (type === 'circle') return { length: pathLength(points) * 2 }
     return { length: pathLength(points) }
 }
 
@@ -203,6 +207,8 @@ export function LayersProvider ({ children }) {
     const [preview, setPreview] = useState(null)
     // Medición en curso { id, type, points, ...medidas }: temporal, nunca entra a `layers`
     const [measure, setMeasure] = useState(null)
+    // Deshacer de la forma que se crea o edita: estados anteriores de sus puntos (el último = el más reciente)
+    const [history, setHistory] = useState({ layerId: null, stack: [] })
     // Borrador del panel en edición, para poder conservarlo si se cambia de capa
     const draftRef = useRef(null)
 
@@ -238,7 +244,7 @@ export function LayersProvider ({ children }) {
     const settleCurrent = () => {
         if (pending) {
             setPending(null)
-            return panel?.mode === 'edit' ? commitPending(layers, pending, draftRef.current) : layers
+            return layers
         }
         if (panel?.mode === 'edit') return commitInto(layers, panel.layerId, draftRef.current)
         return layers
@@ -302,7 +308,7 @@ export function LayersProvider ({ children }) {
         else setLayers(updateNode(layers, id, apply))
     }
 
-    // type: 'line'. Volver a pulsar la herramienta la cancela; empezarla cierra lo que esté abierto
+    // type: 'line' | 'circle'. Volver a pulsar la herramienta la cancela; empezarla cierra lo que esté abierto
     const startMeasure = (type) => {
         if (measure) return setMeasure(null)
 
@@ -314,22 +320,59 @@ export function LayersProvider ({ children }) {
     // "Volver a medir": descarta los puntos y empieza la misma medición de nuevo
     const restartMeasure = () => setMeasure({ ...measure, points: [], ...measureOf(measure.type, []) })
 
+    // La circunferencia son dos puntos (centro y borde); después de ellos los clics no hacen nada
     const addMeasurePoint = (point) => {
+        if (measure.type === 'circle' && measure.points.length >= 2) return
         const points = [...measure.points, point]
         setMeasure({ ...measure, points, ...measureOf(measure.type, points) })
     }
 
+    // Guarda los puntos actuales de la forma `id` para poder volver a ellos
+    const remember = (id, points) => {
+        setHistory((current) => ({ layerId: id, stack: [...(current.layerId === id ? current.stack : []), points] }))
+    }
+
+    const currentShape = (id) => pending?.id === id ? pending : findNode(layers, id)
+
+    // Al empezar a arrastrar un vértice o un punto: todo el arrastre se deshace de una vez
+    const beginMove = (id) => remember(id, currentShape(id).points)
+
+    // Deshace la última acción sobre los puntos; un trazado nuevo que baja del mínimo vuelve a la fase de trazar
+    const undo = () => {
+        const { layerId, stack } = history
+        if (stack.length === 0 || panel?.layerId !== layerId) return
+
+        const points = stack[stack.length - 1]
+        setHistory({ layerId, stack: stack.slice(0, -1) })
+        updateShape(layerId, () => points)
+        if (pending?.id === layerId && points.length < MIN_POINTS[pending.type]) setPanel({ layerId, mode: 'draw' })
+    }
+
+    // Al salir de la edición (o cambiar de capa) ya no hay nada que deshacer
+    useEffect(() => {
+        setHistory((current) => panel && panel.mode !== 'view' && current.layerId === panel.layerId ? current : { layerId: null, stack: [] })
+    }, [panel?.layerId, panel?.mode])
+
     const addPoint = (point) => {
+        // Poner el punto no se deshace (solo sus movimientos); en líneas y polígonos cada vértice sí
+        if (pending.type !== 'point') remember(pending.id, pending.points)
         const points = [...pending.points, point]
         setPending({ ...pending, points, ...measureOf(pending.type, points) })
-        // El punto (1.º) y el polígono (3.º) pasan directo a edición
+        // Al tener los puntos mínimos (punto 1, línea 2, polígono 3) pasa directo a edición
         if (points.length >= AUTO_EDIT_POINTS[pending.type]) {
             setPanel({ layerId: pending.id, mode: 'edit' })
         }
     }
 
+    // En una línea, un clic la prolonga por el final
+    const appendPoint = (id, point) => {
+        remember(id, currentShape(id).points)
+        updateShape(id, (points) => [...points, point])
+    }
+
     // En un polígono cerrado, un clic agrega un vértice en el lado más cercano
     const insertPoint = (id, point) => {
+        remember(id, currentShape(id).points)
         updateShape(id, (points) => {
             // Se compara en pantalla: con el mapa inclinado la cercanía real es la que se ve
             const project = ({ lng, lat }) => map.project([lng, lat])
@@ -338,22 +381,20 @@ export function LayersProvider ({ children }) {
         })
     }
 
-    // Clic sobre el mapa: coloca puntos mientras se traza; en edición de un polígono agrega vértices
+    // Clic sobre el mapa: coloca puntos mientras se traza; en edición agrega vértices (polígono: en el lado más cercano; línea: al final)
     const mapClick = (point) => {
         if (measure) return addMeasurePoint(point)
         if (panel?.mode === 'draw') return addPoint(point)
 
         const shape = panel?.mode === 'edit' ? (pending?.id === panel.layerId ? pending : findNode(layers, panel.layerId)) : null
         if (shape?.type === 'polygon') insertPoint(shape.id, point)
+        if (shape?.type === 'line') appendPoint(shape.id, point)
     }
 
     // Mover un punto aplica de inmediato; cancelar la edición conserva la forma como quedó
     const movePoint = (id, index, point) => {
         updateShape(id, (points) => points.map((current, i) => i === index ? point : current))
     }
-
-    // "Listo" (solo líneas): termina el trazado y habilita la edición
-    const finishLine = () => setPanel({ layerId: pending.id, mode: 'edit' })
 
     const saveLayer = (id, draft) => {
         if (pending?.id === id) {
@@ -400,13 +441,10 @@ export function LayersProvider ({ children }) {
 
     const editLayer = (id) => setPanel({ layerId: id, mode: 'edit' })
 
-    // Cancelar en modo edición conserva lo escrito; durante el trazado se descarta.
+    // Una geometría nueva solo existe al pulsar Guardar: salir del trazado o de su primera edición la descarta.
+    // Cancelar la edición de una capa ya guardada conserva lo escrito.
     const closePanel = (draft) => {
         if (pending) {
-            if (panel?.mode === 'edit') {
-                setLayers(commitPending(layers, pending, draft))
-                setActiveId(pending.id)
-            }
             setPending(null)
         } else if (panel?.mode === 'edit') {
             setLayers(commitInto(layers, panel.layerId, draft))
@@ -439,8 +477,12 @@ export function LayersProvider ({ children }) {
         activeTool: measure ? 'measure' : pending?.type ?? null,
         measure,
         placingPoints: Boolean(measure) || (Boolean(pending) && panel?.mode === 'draw'),
-        // Con un polígono en edición, un clic en el mapa agrega vértices
-        insertingPoints: panel?.mode === 'edit' && panelLayer?.type === 'polygon',
+        // Con una línea o polígono en edición, un clic en el mapa agrega vértices
+        // Deshacer de la forma que se crea o edita (se muestra en el panel); activo solo si hay algo que deshacer
+        canUndo: panel?.layerId === history.layerId && history.stack.length > 0,
+        undo,
+        beginMove,
+        insertingPoints: panel?.mode === 'edit' && (panelLayer?.type === 'polygon' || panelLayer?.type === 'line'),
         pointCount: measure ? measure.points.length : pending?.points.length ?? 0,
         // Formas a pintar sobre el mapa; `handles` = se muestran sus puntos (trazando o editando)
         // Las capas de arriba en el árbol se dibujan encima: el SVG pinta en orden, así que va al revés
@@ -470,7 +512,6 @@ export function LayersProvider ({ children }) {
         createFolder,
         startShape,
         mapClick,
-        finishLine,
         saveLayer,
         editLayer,
         closePanel

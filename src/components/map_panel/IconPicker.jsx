@@ -1,11 +1,13 @@
-import Arrow from '../../assets/Arrow'
+import Entrance from '../../assets/Entrance'
 import Pin from '../../assets/Pin'
+import Pole from '../../assets/Pole'
 import Tree from '../../assets/Tree'
 
 export const ICONS = [
     { id: 'pin', label: 'Chincheta', component: Pin },
     { id: 'tree', label: 'Árbol', component: Tree },
-    { id: 'arrow', label: 'Flecha', component: Arrow }
+    { id: 'entrance', label: 'Entrada', component: Entrance },
+    { id: 'pole', label: 'Poste', component: Pole }
 ]
 
 export const DEFAULT_ICON = ICONS[0].id

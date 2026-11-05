@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'preact/hooks'
-import { Check, Folder, MapPin, Pencil, RotateCcw, Ruler, Save, Spline, VectorSquare } from 'lucide-preact'
+import { useEffect, useRef, useState } from 'preact/hooks'
+import { CircleGauge, Folder, MapPin, Pencil, RotateCcw, Ruler, Save, Spline, VectorSquare } from 'lucide-preact'
 import { useLayers } from "../../context/LayersContext"
 import { Header } from "./Header"
 import { Observation } from "./Observation"
@@ -8,10 +8,30 @@ import { Footer } from "./Footer"
 import { ColorPicker } from "./ColorPicker"
 import { IconPicker } from "./IconPicker"
 import { COORDINATE_FORMATS, ELEVATION_UNITS, elevationAt, formatCoordinates } from "./geo"
-import { useMap } from "../../context/MapContext"
+import { useCursorLocation, useMap } from "../../context/MapContext"
 import { AREA_UNITS, LINE_LENGTH_UNITS, MeasureContent, PERIMETER_UNITS } from "./MeasureContent"
 
 const PANEL_CLASS = "pointer-events-auto flex w-88 flex-col overflow-clip rounded-2xl bg-white shadow-lg"
+
+// Enter equivale a pulsar "Guardar" mientras se edita. Se ignora en el campo de observación (Enter = salto de línea)
+// y sobre botones y menús, donde Enter ya activa su propia acción
+function useEnterToSave(enabled, onSave){
+    const latest = useRef(onSave)
+    latest.current = onSave
+
+    useEffect(() => {
+        if (!enabled) return
+
+        const onKeyDown = (event) => {
+            if (event.key !== 'Enter' || event.isComposing || event.defaultPrevented) return
+            if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return
+            if (event.target instanceof Element && event.target.closest('textarea, button, a, select, [role="menu"]')) return
+            latest.current()
+        }
+        window.addEventListener('keydown', onKeyDown)
+        return () => window.removeEventListener('keydown', onKeyDown)
+    }, [enabled])
+}
 
 function FolderPanel({ layer, editing }){
     const { saveLayer, editLayer, closePanel, draftRef } = useLayers()
@@ -22,6 +42,7 @@ function FolderPanel({ layer, editing }){
 
     const draft = { name, observation }
     draftRef.current = editing ? draft : null
+    useEnterToSave(editing, () => saveLayer(layer.id, draft))
 
     return(
         <div class={PANEL_CLASS}>
@@ -42,9 +63,9 @@ function FolderPanel({ layer, editing }){
 }
 
 // Línea o polígono. mode: 'draw' (trazando) · 'edit' · 'view'
-// La línea muestra "Listo" desde el 2.º punto; el polígono pasa solo a edición con el 3.º
+// Pasan solos a edición al tener los puntos mínimos: 2 la línea, 3 el polígono
 function ShapePanel({ layer, mode }){
-    const { saveLayer, editLayer, finishLine, closePanel, setPreview, draftRef } = useLayers()
+    const { saveLayer, editLayer, closePanel, setPreview, draftRef, undo, canUndo } = useLayers()
     const [name, setName] = useState(layer.name)
     const [observation, setObservation] = useState(layer.observation)
     const [color, setColor] = useState(layer.color)
@@ -61,10 +82,11 @@ function ShapePanel({ layer, mode }){
     const isLine = layer.type === 'line'
     const draft = { name, observation, color }
     draftRef.current = editing ? draft : null
+    useEnterToSave(editing, () => saveLayer(layer.id, draft))
 
     return(
         <div class={PANEL_CLASS}>
-            <Header icon={isLine ? Spline : VectorSquare} name={name} editing={editing} onNameInput={setName} onClose={() => closePanel(draft)}/>
+            <Header icon={isLine ? Spline : VectorSquare} name={name} editing={editing} onNameInput={setName} onClose={() => closePanel(draft)} onUndo={mode !== 'view' ? undo : undefined} canUndo={canUndo}/>
             {mode !== 'draw' && (
                 <Observation
                     editing={editing}
@@ -72,6 +94,7 @@ function ShapePanel({ layer, mode }){
                     value={observation}
                     onOpen={() => setObservationOpen(true)}
                     onInput={setObservation}
+                    imageButton
                 >
                     <ColorPicker value={color} onChange={pickColor}/>
                 </Observation>
@@ -85,7 +108,6 @@ function ShapePanel({ layer, mode }){
                     <MeasureContent name="Perímetro" kind="length" units={PERIMETER_UNITS} value={layer.perimeter}/>
                 </>
             )}
-            {isLine && mode === 'draw' && layer.points.length >= 2 && <Footer variant="outline" icon={Check} label="Listo" onClick={finishLine}/>}
             {editing && <Footer icon={Save} label="Guardar" onClick={() => saveLayer(layer.id, draft)}/>}
             {mode === 'view' && <Footer icon={Pencil} label="Editar" onClick={() => editLayer(layer.id)}/>}
         </div>
@@ -93,7 +115,7 @@ function ShapePanel({ layer, mode }){
 }
 
 // Punto. mode: 'draw' (esperando el clic) · 'edit' · 'view'
-// Ubicación y elevación se muestran al trazar y en la vista; la edición solo pide icono y observación
+// Ubicación y elevación se muestran siempre (al trazar siguen al cursor; al editar, al punto mientras se mueve)
 function PointPanel({ layer, mode }){
     const { saveLayer, editLayer, closePanel, setPreview, draftRef } = useLayers()
     const [name, setName] = useState(layer.name)
@@ -110,14 +132,16 @@ function PointPanel({ layer, mode }){
     const editing = mode === 'edit'
     const draft = { name, observation, icon }
     draftRef.current = editing ? draft : null
+    useEnterToSave(editing, () => saveLayer(layer.id, draft))
 
-    // Sin punto aún se muestra el centro del mapa, como referencia
+    // Sin punto aún, ubicación y elevación siguen al cursor al trazar (o son las del centro del mapa)
     const { map } = useMap()
-    const location = layer.points[0] ?? map?.getCenter() ?? { lng: 0, lat: 0 }
+    const cursor = useCursorLocation(mode === 'draw')
+    const location = layer.points[0] ?? cursor ?? map?.getCenter() ?? { lng: 0, lat: 0 }
 
     return(
         <div class={PANEL_CLASS}>
-            <Header icon={MapPin} name={name} editing={editing} onNameInput={setName} onClose={() => closePanel(draft)}/>
+            <Header icon={MapPin} name={name} editing={editing} options={!editing} onNameInput={setName} onClose={() => closePanel(draft)}/>
             {mode !== 'draw' && (
                 <Observation
                     editing={editing}
@@ -125,21 +149,18 @@ function PointPanel({ layer, mode }){
                     value={observation}
                     onOpen={() => setObservationOpen(true)}
                     onInput={setObservation}
+                    imageButton
                 >
                     <IconPicker value={icon} onChange={pickIcon}/>
                 </Observation>
             )}
-            {!editing && (
-                <>
-                    <MeasureContent
-                        name="Ubicación"
-                        kind="coordinates"
-                        units={COORDINATE_FORMATS}
-                        render={(format) => formatCoordinates(location, format.id)}
-                    />
-                    <MeasureContent name="Elevación del suelo" kind="elevation" units={ELEVATION_UNITS} value={elevationAt(map, location)}/>
-                </>
-            )}
+            <MeasureContent
+                name="Ubicación"
+                kind="coordinates"
+                units={COORDINATE_FORMATS}
+                render={(format) => formatCoordinates(location, format.id)}
+            />
+            <MeasureContent name="Elevación del suelo" kind="elevation" units={ELEVATION_UNITS} value={elevationAt(map, location)}/>
             {editing && <Footer icon={Save} label="Guardar" onClick={() => saveLayer(layer.id, draft)}/>}
             {mode === 'view' && <Footer icon={Pencil} label="Editar" onClick={() => editLayer(layer.id)}/>}
         </div>
@@ -152,10 +173,10 @@ function MeasurePanel({ measure }){
 
     return(
         <div class={PANEL_CLASS}>
-            <Header icon={Ruler} name="Medir línea" options={false} onClose={() => startMeasure(measure.type)}/>
+            <Header icon={measure.type === 'circle' ? CircleGauge : Ruler} name={measure.type === 'circle' ? 'Medir circunferencia' : 'Medir línea'} options={false} onClose={() => startMeasure(measure.type)}/>
             {measure.points.length >= 2 && (
                 <>
-                    <MeasureContent name="Longitud" kind="length" units={LINE_LENGTH_UNITS} value={measure.length}/>
+                    <MeasureContent name={measure.type === 'circle' ? 'Diámetro' : 'Longitud'} kind="length" units={LINE_LENGTH_UNITS} value={measure.length}/>
                     <Footer icon={RotateCcw} label="Volver a medir" onClick={restartMeasure}/>
                 </>
             )}

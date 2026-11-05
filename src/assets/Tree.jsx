@@ -10,25 +10,25 @@ const Tree = (props) => (
     <g filter="url(#icon-tree-shadow)">
       <path
         fill="#fff"
-        d="M16.661 9.113c1.581-2.396 5.097-2.396 6.678 0l3.212 4.869c1.024 1.552.8 3.404-.197 4.678l1.412 1.835c2.025 2.63.15 6.439-3.17 6.44H24v2.75a3 3 0 0 1-3 3h-2a3 3 0 0 1-3-3v-2.75h-.597c-3.319 0-5.194-3.81-3.17-6.44l1.413-1.835c-.997-1.274-1.221-3.126-.198-4.678l3.213-4.87Z"
+        d="M17.062 7.635a4 4 0 0 1 5.876 0l5.129 5.551c1.448 1.568 1.327 3.73.218 5.173l1.465 1.36c2.665 2.473.915 6.932-2.721 6.932h-2.03v4a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3v-4h-2.028c-3.636 0-5.386-4.46-2.72-6.933l1.463-1.359c-1.109-1.443-1.23-3.605.218-5.173l5.13-5.551Z"
       />
     </g>
-    <rect width={4} height={7} x={18} y={23.685} fill="#803B10" rx={1} />
+    <rect width={6} height={8} x={17} y={23.651} fill="#8F400E" rx={1} />
     <path
-      fill="#096"
-      d="M18.415 15.743a2 2 0 0 1 3.17 0l4.596 5.972c1.013 1.315.075 3.22-1.584 3.22h-9.194c-1.66 0-2.597-1.905-1.585-3.22l4.597-5.972Z"
+      fill="#00997D"
+      d="M18.64 14.663a2 2 0 0 1 2.72 0l7.029 6.522c1.333 1.236.458 3.466-1.36 3.466H12.972c-1.819 0-2.694-2.23-1.36-3.466l7.028-6.522Z"
     />
     <path
-      fill="#00BC7D"
-      d="M18.33 10.214a2 2 0 0 1 3.34 0l3.212 4.87c.877 1.329-.077 3.1-1.67 3.1h-6.424c-1.594 0-2.547-1.771-1.67-3.1l3.213-4.87Z"
+      fill="#02B985"
+      d="M18.53 8.991a2 2 0 0 1 2.94 0l5.128 5.553c1.184 1.28.275 3.357-1.469 3.357H14.871c-1.744 0-2.653-2.076-1.47-3.357l5.13-5.553Z"
     />
     <defs>
       <filter
         id="icon-tree-shadow"
-        width={23.208}
-        height={31.368}
-        x={8.396}
-        y={5.316}
+        width={26.073}
+        height={31.302}
+        x={6.963}
+        y={5.349}
         colorInterpolationFilters="sRGB"
         filterUnits="userSpaceOnUse"
       >
@@ -39,16 +39,16 @@ const Tree = (props) => (
           values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
         />
         <feOffset dy={1} />
-        <feGaussianBlur stdDeviation={1.5} />
+        <feGaussianBlur stdDeviation={1} />
         <feComposite in2="hardAlpha" operator="out" />
         <feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.35 0" />
         <feBlend
           in2="BackgroundImageFix"
-          result="effect1_dropShadow_7976_55117"
+          result="effect1_dropShadow_7981_61699"
         />
         <feBlend
           in="SourceGraphic"
-          in2="effect1_dropShadow_7976_55117"
+          in2="effect1_dropShadow_7981_61699"
           result="shape"
         />
       </filter>

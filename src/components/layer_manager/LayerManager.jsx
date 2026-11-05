@@ -2,7 +2,7 @@ import { Fragment } from 'preact'
 import { useRef, useState } from 'preact/hooks'
 import { DragDropProvider, DragOverlay, KeyboardSensor, PointerSensor, useDraggable } from '@dnd-kit/react'
 import { PointerActivationConstraints } from '@dnd-kit/dom'
-import { ArrowUp, Folder, MapPin, Pencil, Spline, Trash2, TreePine, VectorSquare } from 'lucide-preact'
+import { DoorOpen, Folder, MapPin, Pencil, Spline, Trash2, TreePine, UtilityPole, VectorSquare } from 'lucide-preact'
 import { Layer } from './Layer'
 import { LayersActionPanel } from './LayersActionPanel'
 import { LayerHeader } from './LayerHeader'
@@ -11,7 +11,7 @@ import { useLayers } from '../../context/LayersContext'
 
 const TYPE_ICONS = { line: Spline, polygon: VectorSquare }
 // El icono de un punto en el árbol sigue al icono elegido en el panel
-const POINT_ICONS = { pin: MapPin, tree: TreePine, arrow: ArrowUp }
+const POINT_ICONS = { pin: MapPin, tree: TreePine, entrance: DoorOpen, pole: UtilityPole }
 
 const layerIcon = (layer) => {
     if (layer.children) return Folder

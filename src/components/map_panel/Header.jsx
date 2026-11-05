@@ -1,9 +1,10 @@
-import { EllipsisVertical, X } from 'lucide-preact'
+import { EllipsisVertical, Undo2, X } from 'lucide-preact'
 import { GhostButton } from '../buttons/GhostButton'
 import { InputTitle } from './InputTitle'
 
 // options = false oculta el botón "Más opciones" (p. ej. en las mediciones)
-export function Header({ icon: Icon, name, editing = false, options = true, onNameInput, onClose }){
+// onUndo: si se pasa, "Deshacer" reemplaza a "Más opciones" (al crear o editar una forma); canUndo lo habilita
+export function Header({ icon: Icon, name, editing = false, options = true, onNameInput, onClose, onUndo, canUndo = false }){
     return(
         <div class="flex h-16 w-full shrink-0 items-center gap-1 bg-white py-3 pl-4 pr-3">
             <div class="flex min-w-px flex-1 items-center gap-2">
@@ -21,7 +22,12 @@ export function Header({ icon: Icon, name, editing = false, options = true, onNa
                 )}
             </div>
 
-            {options && (
+            {onUndo && (
+                <GhostButton leadingIcon={Undo2} disabled={!canUndo} onClick={onUndo} aria-label="Deshacer" title="Deshacer">
+                    {null}
+                </GhostButton>
+            )}
+            {options && !onUndo && (
                 <GhostButton leadingIcon={EllipsisVertical} disabled={editing} aria-label="Más opciones" title="Más opciones">
                     {null}
                 </GhostButton>

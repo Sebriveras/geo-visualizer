@@ -23,3 +23,35 @@
     scrollbar-color: rgb(0 0 0 / 0.45) transparent;
   }
 }
+
+/* Selector de color del diálogo de color personalizado (react-colorful): cuadro de saturación de 180 px y barra de
+   matiz de 24 px a ancho completo. Con el prefijo del diálogo se impone a los estilos que la librería inyecta. */
+[role="dialog"] .react-colorful {
+  width: 100%;
+  height: 204px;
+}
+[role="dialog"] .react-colorful__saturation {
+  border: 0;
+  border-radius: 0;
+}
+[role="dialog"] .react-colorful__hue {
+  height: 24px;
+  border-radius: 0;
+}
+[role="dialog"] .react-colorful__pointer {
+  width: 20px;
+  height: 20px;
+}
+
+/* Opacidad personalizada: de RgbaColorPicker solo se deja la barra de alpha, de 40 px a ancho completo */
+[role="dialog"] .alpha-only {
+  height: 40px;
+}
+[role="dialog"] .alpha-only .react-colorful__saturation,
+[role="dialog"] .alpha-only .react-colorful__hue {
+  display: none;
+}
+[role="dialog"] .alpha-only .react-colorful__alpha {
+  height: 40px;
+  border-radius: 0;
+}

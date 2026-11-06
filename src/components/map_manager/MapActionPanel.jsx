@@ -33,7 +33,7 @@ function IconButton ({ label, icon, trailingIcon, disabled = false, active = fal
 }
 
 export function MapActionPanel () {
-    const { activeTool, startShape, startMeasure } = useLayers()
+    const { activeTool, measure, startShape, startMeasure } = useLayers()
     // Botón de medir que abrió el menú; null = cerrado
     const [measureAnchor, setMeasureAnchor] = useState(null)
 
@@ -53,11 +53,11 @@ export function MapActionPanel () {
                     aria-expanded={Boolean(measureAnchor)}
                     data-menu-trigger
                     onClick={(event) => {
-                        if (activeTool === 'measure') return startMeasure('line')
+                        if (activeTool === 'measure') return startMeasure(measure.type)
                         setMeasureAnchor(measureAnchor ? null : event.currentTarget)
                     }}
                 />
-                <IconButton label="Terreno" icon={Mountain} />
+                <IconButton label="Perfil de elevación" icon={Mountain} active={activeTool === 'profile'} onClick={() => startMeasure('profile')} />
             </div>
 
             <IconButton label="Más opciones" icon={EllipsisVertical} />

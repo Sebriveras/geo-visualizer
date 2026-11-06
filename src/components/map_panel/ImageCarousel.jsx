@@ -44,7 +44,22 @@ export function useImages (initial = []) {
         error,
         input,
         openPicker: () => inputRef.current.click(),
-        removeImage: (id) => setImages((current) => current.filter((image) => image.id !== id))
+        removeImage: (id) => setImages((current) => current.filter((image) => image.id !== id)),
+        clearImages: () => setImages([])
+    }
+}
+
+// Componente "Imagen" de la fila de botones del panel: agrega imágenes o, si ya hay, las elimina todas (con advertencia)
+export function imagesAction ({ images, openPicker, clearImages }) {
+    return {
+        id: 'images',
+        label: 'Imagen',
+        active: images.length > 0,
+        onAdd: openPicker,
+        onRemove: clearImages,
+        confirm: images.length > 0
+            ? { title: 'Eliminar imágenes', message: images.length === 1 ? '¿Deseas eliminar la imagen de esta capa?' : `¿Deseas eliminar las ${images.length} imágenes de esta capa?` }
+            : null
     }
 }
 

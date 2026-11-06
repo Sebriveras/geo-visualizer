@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { CircleGauge, Folder, MapPin, Pencil, RotateCcw, Ruler, Save, Spline, VectorSquare } from 'lucide-preact'
+import { CircleGauge, Folder, MapPin, Mountain, Pencil, RotateCcw, Ruler, Save, Spline, VectorSquare } from 'lucide-preact'
 import { useLayers } from "../../context/LayersContext"
 import { Header } from "./Header"
 import { Observation } from "./Observation"
 import { Content } from "./Content"
 import { Footer } from "./Footer"
 import { ColorPicker } from "./ColorPicker"
+import { OpacityPicker } from "./OpacityPicker"
+import { WidthPicker } from "./WidthPicker"
+import { BufferPicker, DEFAULT_BUFFER } from "./BufferPicker"
 import { IconPicker } from "./IconPicker"
-import { ImageCarousel, useImages } from "./ImageCarousel"
+import { ElevationProfile } from "./ElevationProfile"
+import { ImageCarousel, imagesAction, useImages } from "./ImageCarousel"
 import { COORDINATE_FORMATS, ELEVATION_UNITS, elevationAt, formatCoordinates } from "./geo"
 import { useCursorLocation, useMap } from "../../context/MapContext"
 import { AREA_UNITS, LINE_LENGTH_UNITS, MeasureContent, PERIMETER_UNITS } from "./MeasureContent"
@@ -28,7 +32,7 @@ function useEnterToSave(enabled, onSave){
         const onKeyDown = (event) => {
             if (event.key !== 'Enter' || event.isComposing || event.defaultPrevented) return
             if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return
-            if (event.target instanceof Element && event.target.closest('textarea, button, a, select, [role="menu"]')) return
+            if (event.target instanceof Element && event.target.closest('textarea, button, a, select, [role="menu"], [role="dialog"], [role="alertdialog"]')) return
             latest.current()
         }
         window.addEventListener('keydown', onKeyDown)
@@ -56,6 +60,10 @@ function FolderPanel({ layer, editing }){
                     open={observationOpen}
                     value={observation}
                     onOpen={() => setObservationOpen(true)}
+                    onClose={() => {
+                        setObservation('')
+                        setObservationOpen(false)
+                    }}
                     onInput={setObservation}
                 />
                 {!editing && <Content name="Capas incluidas" value={layer.children.length}/>}
@@ -74,19 +82,37 @@ function ShapePanel({ layer, mode }){
     const [name, setName] = useState(layer.name)
     const [observation, setObservation] = useState(layer.observation)
     const [color, setColor] = useState(layer.color)
+    const [width, setWidth] = useState(layer.width)
+    const [opacity, setOpacity] = useState(layer.opacity)
+    // Buffer de una línea en metros; null = sin buffer. Su opacidad es fija (DEFAULT_BUFFER_OPACITY)
+    const [buffer, setBuffer] = useState(layer.buffer ?? null)
     const [observationOpen, setObservationOpen] = useState(Boolean(layer.observation))
 
     // El mapa muestra el color elegido en vivo; al salir del panel se descarta la vista previa
     useEffect(() => () => setPreview(null), [])
+    // Cada cambio se refleja en el mapa al instante, con los valores vigentes de los demás selectores
+    const preview = (next) => setPreview({ layerId: layer.id, color, width, opacity, buffer, ...next })
     const pickColor = (value) => {
         setColor(value)
-        setPreview({ layerId: layer.id, color: value })
+        preview({ color: value })
+    }
+    const pickWidth = (value) => {
+        setWidth(value)
+        preview({ width: value })
+    }
+    const pickOpacity = (value) => {
+        setOpacity(value)
+        preview({ opacity: value })
+    }
+    const pickBuffer = (value) => {
+        setBuffer(value)
+        preview({ buffer: value })
     }
 
     const editing = mode === 'edit'
     const isLine = layer.type === 'line'
-    const { images, error, input, openPicker, removeImage } = useImages(layer.images)
-    const draft = { name, observation, color, images }
+    const { images, error, input, openPicker, removeImage, clearImages } = useImages(layer.images)
+    const draft = { name, observation, color, width, opacity, ...(isLine && { buffer }), images }
     draftRef.current = editing ? draft : null
     useEnterToSave(editing, () => saveLayer(layer.id, draft))
 
@@ -103,10 +129,30 @@ function ShapePanel({ layer, mode }){
                             open={observationOpen}
                             value={observation}
                             onOpen={() => setObservationOpen(true)}
+                            onClose={() => {
+                                setObservation('')
+                                setObservationOpen(false)
+                            }}
                             onInput={setObservation}
-                            onImage={images.length === 0 ? openPicker : undefined}
+                            extraActions={[
+                                imagesAction({ images, openPicker, clearImages }),
+                                isLine && {
+                                    id: 'buffer',
+                                    label: 'Buffer',
+                                    active: buffer !== null,
+                                    onAdd: () => pickBuffer(DEFAULT_BUFFER),
+                                    onRemove: () => pickBuffer(null),
+                                    // Se quita sin advertencia: volver a añadirlo es un clic
+                                    confirm: null
+                                }
+                            ]}
                         >
-                            <ColorPicker value={color} onChange={pickColor}/>
+                            <div class="flex flex-col gap-3">
+                                {isLine && buffer !== null && <BufferPicker value={buffer} onChange={pickBuffer}/>}
+                                {!isLine && <OpacityPicker value={opacity} color={color} onChange={pickOpacity}/>}
+                                <WidthPicker value={width} onChange={pickWidth}/>
+                                <ColorPicker value={color} onChange={pickColor}/>
+                            </div>
                         </Observation>
                     </>
                 )}
@@ -143,7 +189,7 @@ function PointPanel({ layer, mode }){
     }
 
     const editing = mode === 'edit'
-    const { images, error, input, openPicker, removeImage } = useImages(layer.images)
+    const { images, error, input, openPicker, removeImage, clearImages } = useImages(layer.images)
     const draft = { name, observation, icon, images }
     draftRef.current = editing ? draft : null
     useEnterToSave(editing, () => saveLayer(layer.id, draft))
@@ -166,8 +212,12 @@ function PointPanel({ layer, mode }){
                             open={observationOpen}
                             value={observation}
                             onOpen={() => setObservationOpen(true)}
+                            onClose={() => {
+                                setObservation('')
+                                setObservationOpen(false)
+                            }}
                             onInput={setObservation}
-                            onImage={images.length === 0 ? openPicker : undefined}
+                            extraActions={[imagesAction({ images, openPicker, clearImages })]}
                         >
                             <IconPicker value={icon} onChange={pickIcon}/>
                         </Observation>
@@ -207,9 +257,27 @@ function MeasurePanel({ measure }){
     )
 }
 
+// Perfil de elevación del trazado: con el 1.er punto solo el título; desde el 2.º, la gráfica (que crece con cada punto)
+function ProfilePanel({ measure }){
+    const { startMeasure, restartMeasure } = useLayers()
+
+    return(
+        <div class={PANEL_CLASS}>
+            <Header icon={Mountain} name="Perfil de elevación" options={false} onClose={() => startMeasure(measure.type)}/>
+            {measure.points.length >= 2 && (
+                <>
+                    <ElevationProfile points={measure.points}/>
+                    <Footer icon={RotateCcw} label="Volver a calcular" onClick={restartMeasure}/>
+                </>
+            )}
+        </div>
+    )
+}
+
 export function MapPanel(){
     const { panel, panelLayer, measure } = useLayers()
 
+    if (measure?.type === 'profile') return <ProfilePanel measure={measure}/>
     if (measure) return <MeasurePanel measure={measure}/>
     if (!panel || !panelLayer) return null
 

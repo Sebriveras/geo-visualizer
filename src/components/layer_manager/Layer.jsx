@@ -4,7 +4,7 @@ import { LayerCheckbox } from './LayerCheckbox'
 // Para arrastrar: rowRef/gripRef los entrega useDraggable (el agarre es el grip), `dragging` marca la fila
 // de origen (queda como hueco), `overlay` es la copia que sigue al cursor y `indicator` el destino del soltado:
 // { edge: 'top' | 'bottom', level } = línea entre filas · { inside: true } = dentro de esta carpeta
-export function Layer ({ id, name = 'Layer', count = '##', level = 0, active = false, checked = false, onCheckedChange, icon: Icon, expanded, onToggle, onClick, menuOpen = false, onMenu, rowRef, gripRef, dragging = false, overlay = false, indicator }) {
+export function Layer ({ id, name = 'Layer', count = '##', level = 0, active = false, checked = false, onCheckedChange, icon: Icon, expanded, onToggle, onClick, onDoubleClick, menuOpen = false, onMenu, rowRef, gripRef, dragging = false, overlay = false, indicator }) {
     const background = overlay ? (active ? 'bg-blue-50 opacity-80' : 'bg-slate-200 opacity-80') : dragging ? 'bg-white' : indicator?.inside ? 'bg-blue-100 ring-1 ring-inset ring-[#51a2ff]' : active ? 'bg-blue-100' : 'hover:bg-slate-100'
 
     return (
@@ -15,6 +15,8 @@ export function Layer ({ id, name = 'Layer', count = '##', level = 0, active = f
             tabIndex={overlay ? -1 : 0}
             aria-pressed={active}
             onClick={onClick}
+            // Los controles de la fila (chevron, casilla, menú) y el grip no cuentan como doble clic sobre la capa
+            onDblClick={(event) => !event.target.closest('button, input, [data-grip]') && onDoubleClick?.()}
             onKeyDown={(event) => {
                 if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
                     event.preventDefault()
@@ -25,6 +27,7 @@ export function Layer ({ id, name = 'Layer', count = '##', level = 0, active = f
         >
             <span
                 ref={gripRef}
+                data-grip
                 onClick={(event) => event.stopPropagation()}
                 class={`flex size-3 shrink-0 touch-none items-center justify-center text-slate-500 ${gripRef ? 'cursor-grab' : ''} ${overlay ? '' : 'opacity-0 group-hover:opacity-100'}`}
             >

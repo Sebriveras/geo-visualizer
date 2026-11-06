@@ -13,10 +13,12 @@
     "@dnd-kit/react": "^0.5.3",
     "@tailwindcss/vite": "^4.3.3",
     "@turf/area": "^7.4.0",
+    "@turf/buffer": "^7.4.0",
     "@turf/distance": "^7.4.0",
     "lucide-preact": "^1.66.0",
     "mapbox-gl": "^3.34.2",
     "preact": "^11.0.2",
+    "react-colorful": "^5.8.1",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {

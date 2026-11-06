@@ -5,8 +5,10 @@ import "mapbox-gl/dist/mapbox-gl.css"
 import { InfoSection } from "./InfoSection"
 import { FloatingSection } from "./FloatingSection"
 import { useLayers } from "../../context/LayersContext"
-import { setCursorLocation, useMap } from "../../context/MapContext"
+import { setCursorLocation, useMap, useProfileHover } from "../../context/MapContext"
 import { findIcon } from "../map_panel/IconPicker"
+import { DEFAULT_BUFFER_OPACITY } from "../map_panel/BufferPicker"
+import buffer from "@turf/buffer"
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN
 
@@ -22,14 +24,21 @@ const MAP_OPTIONS = {
 }
 const TERRAIN_EXAGGERATION = 1.3
 
-// Grosor del trazo (px). Cada forma puede traer su `width` para personalizarlo; si no, se usa este
+// Grosor del trazo (px) y opacidad del relleno de las formas que no los traen (la medición); las capas llevan los suyos
 const DEFAULT_WIDTH = 1.5
+const DEFAULT_OPACITY = 0.15
 
 const SHAPES = 'kmz-shapes'
+const BUFFERS = 'kmz-buffers'
+const PROFILE_HOVER = 'kmz-profile-hover'
 const HANDLES = 'kmz-handles'
 
 // El icono (40×40) se apoya con su base sobre la coordenada: su centro queda 10 px por encima
 const MARKER_OFFSET = [0, -10]
+
+// Dibuja el icono de un marcador. Va en un microtask: estos efectos pueden ejecutarse en pleno render de
+// MapSection, y un render anidado de Preact lo deja sin su componente actual ("Hook can only be invoked...")
+const paint = (vnode, element) => queueMicrotask(() => render(vnode, element))
 
 const toLngLat = ({ lng, lat }) => ({ lng, lat })
 const coordinates = (points) => points.map(({ lng, lat }) => [lng, lat])
@@ -55,10 +64,10 @@ function circleRing (center, edge) {
 
 // Líneas, polígonos y circunferencias como GeoJSON; `trail` = coordenada hacia la que se estira el último tramo mientras se traza
 function shapeFeatures (shapes, trail) {
-    return shapes.flatMap(({ id, type, points, color, handles, width = DEFAULT_WIDTH }) => {
+    return shapes.flatMap(({ id, type, points, color, handles, width = DEFAULT_WIDTH, opacity = DEFAULT_OPACITY }) => {
         if (type === 'point') return []
 
-        const properties = { id, color, width }
+        const properties = { id, color, width, opacity }
 
         // Circunferencia: centro + punto del borde (o el cursor mientras se elige); se dibuja el círculo y su radio
         if (type === 'circle') {
@@ -78,6 +87,30 @@ function shapeFeatures (shapes, trail) {
         if (path.length >= 2) return [{ type: 'Feature', properties, geometry: { type: 'LineString', coordinates: coordinates(path) } }]
         return []
     })
+}
+
+// Buffers de las líneas (zona a `buffer` metros a cada lado) como polígonos. Calcularlos es costoso y esta función
+// corre en cada movimiento del cursor mientras se traza, así que se reutiliza el último resultado por línea.
+const bufferCache = new Map()
+
+function bufferFeatures (shapes) {
+    const present = new Set()
+
+    const features = shapes.flatMap(({ id, type, points, color, buffer: meters, opacity = DEFAULT_BUFFER_OPACITY }) => {
+        if (type !== 'line' || !meters || points.length < 2) return []
+        present.add(id)
+
+        let cached = bufferCache.get(id)
+        if (!cached || cached.points !== points || cached.meters !== meters) {
+            const area = buffer({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coordinates(points) } }, meters, { units: 'meters' })
+            cached = { points, meters, geometry: area?.geometry }
+            bufferCache.set(id, cached)
+        }
+        return cached.geometry ? [{ type: 'Feature', properties: { id, color, opacity }, geometry: cached.geometry }] : []
+    })
+
+    bufferCache.forEach((_, id) => present.has(id) || bufferCache.delete(id))
+    return features
 }
 
 // Vértices visibles (trazando o editando); `movable` permite arrastrarlos
@@ -105,13 +138,22 @@ function addMapContent (map) {
 
     map.addSource(SHAPES, { type: 'geojson', data: emptyCollection })
     map.addSource(HANDLES, { type: 'geojson', data: emptyCollection })
+    map.addSource(BUFFERS, { type: 'geojson', data: emptyCollection })
+
+    // El buffer va debajo de todo lo demás: solo es el área, sin borde propio
+    map.addLayer({
+        id: 'kmz-buffer-fill',
+        type: 'fill',
+        source: BUFFERS,
+        paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['get', 'opacity'] }
+    })
 
     map.addLayer({
         id: 'kmz-fill',
         type: 'fill',
         source: SHAPES,
         filter: ['==', ['geometry-type'], 'Polygon'],
-        paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.15 }
+        paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['get', 'opacity'] }
     })
     map.addLayer({
         id: 'kmz-line',
@@ -120,16 +162,24 @@ function addMapContent (map) {
         layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': ['get', 'color'], 'line-width': ['get', 'width'] }
     })
+    map.addSource(PROFILE_HOVER, { type: 'geojson', data: emptyCollection })
     map.addLayer({
         id: HANDLES,
         type: 'circle',
         source: HANDLES,
         paint: { 'circle-radius': 6, 'circle-color': ['get', 'color'], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 3 }
     })
+    // Punto de la línea del perfil de elevación sobre el que está el cursor en la gráfica (va encima de todo)
+    map.addLayer({
+        id: 'kmz-profile-hover',
+        type: 'circle',
+        source: PROFILE_HOVER,
+        paint: { 'circle-radius': 7, 'circle-color': '#5ab0e0', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2.5 }
+    })
 }
 
 export function MapSection(){
-    const { placingPoints, insertingPoints, pointCount, mapClick, movePoint, beginMove, mapShapes, openLayer, panel } = useLayers()
+    const { placingPoints, insertingPoints, extendingLine, pointCount, mapClick, movePoint, beginMove, mapShapes, openLayer, panel } = useLayers()
     const { setMap } = useMap()
     const containerRef = useRef(null)
     const mapRef = useRef(null)
@@ -141,10 +191,11 @@ export function MapSection(){
     const [ready, setReady] = useState(false)
     // Posición del cursor sobre el mapa mientras se traza: { x, y (píxeles), lng, lat }
     const [cursor, setCursor] = useState(null)
+    const profileHover = useProfileHover()
 
     // Los listeners del mapa se registran una sola vez; leen siempre lo último desde aquí
     const latest = useRef({})
-    latest.current = { mapClick, movePoint, beginMove, placingPoints, insertingPoints, openLayer, panel }
+    latest.current = { mapClick, movePoint, beginMove, placingPoints, insertingPoints, extendingLine, openLayer, panel }
 
     useEffect(() => {
         if (!TOKEN) return
@@ -190,7 +241,7 @@ export function MapSection(){
         map.on('mousemove', (event) => {
             if (dragRef.current) return latest.current.movePoint(dragRef.current.id, dragRef.current.index, toLngLat(event.lngLat))
             setCursorLocation(toLngLat(event.lngLat))
-            if (latest.current.placingPoints) {
+            if (latest.current.placingPoints || latest.current.extendingLine) {
                 return setCursor({ x: event.point.x, y: event.point.y, ...toLngLat(event.lngLat) })
             }
             if (!map.isMoving() && !latest.current.insertingPoints) {
@@ -208,6 +259,8 @@ export function MapSection(){
             if (movable !== true && movable !== 'true') return
             event.preventDefault()
             latest.current.beginMove(id)
+            // Mientras se arrastra un vértice no hay tramo hacia el cursor
+            setCursor(null)
             dragRef.current = { id, index }
             map.dragPan.disable()
         }
@@ -233,7 +286,7 @@ export function MapSection(){
         return () => {
             markersRef.current.forEach(({ marker, element }) => {
                 marker.remove()
-                render(null, element)
+                paint(null, element)
             })
             markersRef.current.clear()
             map.remove()
@@ -245,8 +298,8 @@ export function MapSection(){
 
     // Al terminar de trazar no queda cursor que seguir
     useEffect(() => {
-        if (!placingPoints) setCursor(null)
-    }, [placingPoints])
+        if (!placingPoints && !extendingLine) setCursor(null)
+    }, [placingPoints, extendingLine])
 
     useEffect(() => {
         if (!ready) return
@@ -257,13 +310,22 @@ export function MapSection(){
     useEffect(() => {
         if (!ready) return
         const map = mapRef.current
-        const trail = placingPoints && cursor ? [cursor.lng, cursor.lat] : null
+        const trail = (placingPoints || extendingLine) && cursor ? [cursor.lng, cursor.lat] : null
         map.getSource(SHAPES).setData({
             type: 'FeatureCollection',
             features: shapeFeatures(mapShapes, trail && { lng: trail[0], lat: trail[1] })
         })
+        map.getSource(BUFFERS).setData({ type: 'FeatureCollection', features: bufferFeatures(mapShapes) })
         map.getSource(HANDLES).setData({ type: 'FeatureCollection', features: handleFeatures(mapShapes) })
-    }, [ready, mapShapes, placingPoints, cursor])
+    }, [ready, mapShapes, placingPoints, extendingLine, cursor])
+
+    // Marcador del perfil de elevación
+    useEffect(() => {
+        if (!ready) return
+        mapRef.current.getSource(PROFILE_HOVER).setData(profileHover
+            ? { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [profileHover.lng, profileHover.lat] } }
+            : emptyCollection)
+    }, [ready, profileHover])
 
     // Puntos: un marcador con el icono elegido, que se arrastra en edición
     useEffect(() => {
@@ -298,13 +360,13 @@ export function MapSection(){
                 event.stopPropagation()
                 latest.current.openLayer(id)
             }
-            render(h(findIcon(icon).component, {}), entry.element)
+            paint(h(findIcon(icon).component, {}), entry.element)
         })
 
         markers.forEach(({ marker, element }, id) => {
             if (present.has(id)) return
             marker.remove()
-            render(null, element)
+            paint(null, element)
             markers.delete(id)
         })
     }, [ready, mapShapes, placingPoints, insertingPoints])

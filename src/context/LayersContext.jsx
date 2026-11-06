@@ -4,6 +4,9 @@ import area from '@turf/area'
 import turfDistance from '@turf/distance'
 import { useMap } from './MapContext'
 import { DEFAULT_COLOR } from '../components/map_panel/ColorPicker'
+import { DEFAULT_OPACITY } from '../components/map_panel/OpacityPicker'
+import { DEFAULT_WIDTH } from '../components/map_panel/WidthPicker'
+import { DEFAULT_BUFFER_OPACITY } from '../components/map_panel/BufferPicker'
 import { DEFAULT_ICON } from '../components/map_panel/IconPicker'
 
 const DEFAULT_FOLDER_NAME = 'Nueva carpeta'
@@ -154,6 +157,16 @@ function collectFolderIds (layers) {
     return layers.flatMap((layer) => layer.children ? [layer.id, ...collectFolderIds(layer.children)] : [])
 }
 
+// Área del mapa que queda libre al centrar una capa: el panel ocupa el lado derecho (px)
+const FOCUS_PADDING = { top: 60, bottom: 60, left: 60, right: 420 }
+const POINT_FOCUS_ZOOM = 17
+const MAX_FOCUS_ZOOM = 19
+const TILE_SIZE = 512
+const METERS_PER_DEGREE = 111320
+
+// Coordenada vertical de la proyección Mercator (radianes) de una latitud en grados
+const mercatorY = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360))
+
 function collectShapes (layers) {
     return layers.flatMap((layer) => layer.children ? collectShapes(layer.children) : layer.points ? [layer] : [])
 }
@@ -166,7 +179,7 @@ function targetParentId (layers, activeId) {
 }
 
 // draft = { name, observation, color?, icon? }; una observación vacía equivale a no tener observación
-function commitInto (layers, id, { name, observation, color, icon, images }) {
+function commitInto (layers, id, { name, observation, color, width, opacity, buffer, icon, images }) {
     const layer = findNode(layers, id)
     const fallback = DEFAULT_NAMES[layer.children ? 'folder' : layer.type]
     const finalName = uniqueName(findSiblings(layers, id), name.trim() || fallback, id)
@@ -175,13 +188,16 @@ function commitInto (layers, id, { name, observation, color, icon, images }) {
         name: finalName,
         observation: observation.trim(),
         ...(color !== undefined && { color }),
+        ...(width !== undefined && { width }),
+        ...(opacity !== undefined && { opacity }),
+        ...(buffer !== undefined && { buffer }),
         ...(icon !== undefined && { icon }),
         ...(images !== undefined && { images })
     }))
 }
 
 // Una capa en creación no entra al árbol hasta que se guarda o se cancela en edición
-function commitPending (layers, shape, { name, observation, color, icon, images }) {
+function commitPending (layers, shape, { name, observation, color, width, opacity, buffer, icon, images }) {
     const { parentId, ...layer } = shape
     const siblings = parentId === null ? layers : findNode(layers, parentId).children
     return addChild(layers, parentId, {
@@ -189,6 +205,9 @@ function commitPending (layers, shape, { name, observation, color, icon, images 
         name: uniqueName(siblings, name.trim() || DEFAULT_NAMES[shape.type]),
         observation: observation.trim(),
         ...(color !== undefined && { color }),
+        ...(width !== undefined && { width }),
+        ...(opacity !== undefined && { opacity }),
+        ...(buffer !== undefined && { buffer }),
         ...(icon !== undefined && { icon }),
         ...(images !== undefined && { images })
     })
@@ -205,7 +224,7 @@ export function LayersProvider ({ children }) {
     const [pending, setPending] = useState(null)
     // Unidad elegida por tipo de medida: longitud (línea y perímetro), área, elevación y formato de coordenadas
     const [units, setUnits] = useState({ length: 'm', area: 'm2', elevation: 'm', coordinates: 'dms' })
-    // { layerId, color?, icon? }: color o icono que se está probando en el panel, antes de guardarlo
+    // { layerId, color?, width?, opacity?, buffer?, icon? }: lo que se está probando en el panel, antes de guardarlo
     const [preview, setPreview] = useState(null)
     // Medición en curso { id, type, points, ...medidas }: temporal, nunca entra a `layers`
     const [measure, setMeasure] = useState(null)
@@ -286,7 +305,7 @@ export function LayersProvider ({ children }) {
             name: DEFAULT_NAMES[type],
             observation: '',
             visible: true,
-            ...(type === 'point' ? { icon: DEFAULT_ICON } : { color: DEFAULT_COLOR }),
+            ...(type === 'point' ? { icon: DEFAULT_ICON } : { color: DEFAULT_COLOR, width: DEFAULT_WIDTH, opacity: type === 'polygon' ? DEFAULT_OPACITY : DEFAULT_BUFFER_OPACITY, ...(type === 'line' && { buffer: null }) }),
             // Vértices { lng, lat }; las medidas se derivan de ellos
             points: [],
             ...measureOf(type, []),
@@ -310,9 +329,10 @@ export function LayersProvider ({ children }) {
         else setLayers(updateNode(layers, id, apply))
     }
 
-    // type: 'line' | 'circle'. Volver a pulsar la herramienta la cancela; empezarla cierra lo que esté abierto
+    // type: 'line' | 'circle' | 'profile' (perfil de elevación). Volver a pulsar la herramienta la cancela; empezarla cierra lo que esté abierto
     const startMeasure = (type) => {
-        if (measure) return setMeasure(null)
+        // Pulsar la misma herramienta la cancela; pulsar otra la reemplaza
+        if (measure?.type === type) return setMeasure(null)
 
         setLayers(settleCurrent())
         setPanel(null)
@@ -423,6 +443,43 @@ export function LayersProvider ({ children }) {
         setPanel({ layerId: id, mode })
     }
 
+    // Doble clic en una capa: centra el mapa en su geometría (en una carpeta, en todo lo que contiene).
+    // Deja libre el lado derecho, donde se abre el panel.
+    const focusLayer = (id) => {
+        // Los buffers cuentan: cada punto de una línea con buffer se extiende esa distancia hacia los cuatro lados
+        const points = collectShapes([findNode(layers, id)]).flatMap((shape) => {
+            if (!shape.buffer) return shape.points
+            return shape.points.flatMap(({ lng, lat }) => {
+                const dLat = shape.buffer / METERS_PER_DEGREE
+                const dLng = dLat / Math.cos(lat * Math.PI / 180)
+                return [{ lng: lng - dLng, lat: lat - dLat }, { lng: lng + dLng, lat: lat + dLat }]
+            })
+        })
+        if (!map || points.length === 0) return
+
+        const lngs = points.map(({ lng }) => lng)
+        const lats = points.map(({ lat }) => lat)
+        const [west, east, south, north] = [Math.min(...lngs), Math.max(...lngs), Math.min(...lats), Math.max(...lats)]
+        // El área libre no está centrada en el mapa: se compensa con el desplazamiento del destino
+        const offset = [(FOCUS_PADDING.left - FOCUS_PADDING.right) / 2, (FOCUS_PADDING.top - FOCUS_PADDING.bottom) / 2]
+
+        if (west === east && south === north) {
+            map.flyTo({ center: [west, south], zoom: Math.max(map.getZoom(), POINT_FOCUS_ZOOM), offset })
+            return
+        }
+
+        // Zoom que hace caber el recuadro en el área libre. Se calcula aquí y no con fitBounds: con el relieve
+        // activo, Mapbox tiene en cuenta la elevación y alejaba el mapa mucho más de lo necesario.
+        const { clientWidth, clientHeight } = map.getCanvas()
+        const width = Math.max(clientWidth - FOCUS_PADDING.left - FOCUS_PADDING.right, 100)
+        const height = Math.max(clientHeight - FOCUS_PADDING.top - FOCUS_PADDING.bottom, 100)
+        const spanX = (east - west) / 360
+        const spanY = (mercatorY(north) - mercatorY(south)) / (2 * Math.PI)
+        const zoom = Math.min(MAX_FOCUS_ZOOM, Math.log2(Math.min(width / spanX, height / spanY) / TILE_SIZE))
+
+        map.easeTo({ center: [(west + east) / 2, (south + north) / 2], zoom, offset })
+    }
+
     // Desde el menú de la capa: la selecciona y abre su panel en modo edición
     const startEditing = (id) => openLayer(id, 'edit')
 
@@ -476,7 +533,7 @@ export function LayersProvider ({ children }) {
         panelLayer,
         // Herramienta de dibujo en curso: 'point' | 'line' | 'polygon' | null
         // Herramienta de dibujo en curso (incluye 'measure')
-        activeTool: measure ? 'measure' : pending?.type ?? null,
+        activeTool: measure ? (measure.type === 'profile' ? 'profile' : 'measure') : pending?.type ?? null,
         measure,
         placingPoints: Boolean(measure) || (Boolean(pending) && panel?.mode === 'draw'),
         // Con una línea o polígono en edición, un clic en el mapa agrega vértices
@@ -484,6 +541,8 @@ export function LayersProvider ({ children }) {
         canUndo: panel?.layerId === history.layerId && history.stack.length > 0,
         undo,
         beginMove,
+        // Con una línea en edición, cada clic la prolonga: se dibuja el tramo hacia el cursor, como al trazar
+        extendingLine: panel?.mode === 'edit' && panelLayer?.type === 'line',
         insertingPoints: panel?.mode === 'edit' && (panelLayer?.type === 'polygon' || panelLayer?.type === 'line'),
         pointCount: measure ? measure.points.length : pending?.points.length ?? 0,
         // Formas a pintar sobre el mapa; `handles` = se muestran sus puntos (trazando o editando)
@@ -493,6 +552,9 @@ export function LayersProvider ({ children }) {
             type: shape.type,
             points: shape.points,
             color: preview?.layerId === shape.id && preview.color ? preview.color : shape.color,
+            width: preview?.layerId === shape.id && preview.width ? preview.width : shape.width,
+            opacity: preview?.layerId === shape.id && preview.opacity !== undefined ? preview.opacity : shape.opacity,
+            buffer: preview?.layerId === shape.id && preview.buffer !== undefined ? preview.buffer : shape.buffer,
             icon: preview?.layerId === shape.id && preview.icon ? preview.icon : shape.icon,
             handles: panel?.layerId === shape.id && panel.mode !== 'view',
             movable: panel?.layerId === shape.id && panel.mode === 'edit'
@@ -505,6 +567,7 @@ export function LayersProvider ({ children }) {
         setUnit,
         draftRef,
         openLayer,
+        focusLayer,
         startEditing,
         deleteLayer,
         moveLayer,

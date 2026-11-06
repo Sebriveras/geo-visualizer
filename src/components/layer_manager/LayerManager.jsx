@@ -79,7 +79,7 @@ function DraggableLayer (props) {
     return <Layer {...props} rowRef={ref} gripRef={handleRef} dragging={isDragSource}/>
 }
 
-function LayerTree ({ layers, level = 0, activeId, onSelect, collapsed, onToggle, onToggleVisible, menuId, onMenu, drop, lastId }) {
+function LayerTree ({ layers, level = 0, activeId, onSelect, collapsed, onToggle, onToggleVisible, onFocus, menuId, onMenu, drop, lastId }) {
     return layers.map((layer) => {
         const isFolder = Boolean(layer.children)
         const isCollapsed = collapsed.has(layer.id)
@@ -98,6 +98,7 @@ function LayerTree ({ layers, level = 0, activeId, onSelect, collapsed, onToggle
                     expanded={isFolder ? !isCollapsed : undefined}
                     onToggle={isFolder ? () => onToggle(layer.id) : undefined}
                     onClick={() => onSelect(layer.id)}
+                    onDoubleClick={() => onFocus(layer.id)}
                     menuOpen={menuId === layer.id}
                     onMenu={(trigger) => onMenu(layer.id, trigger)}
                     indicator={indicatorFor(layer, level, drop, lastId)}
@@ -111,6 +112,7 @@ function LayerTree ({ layers, level = 0, activeId, onSelect, collapsed, onToggle
                         collapsed={collapsed}
                         onToggle={onToggle}
                         onToggleVisible={onToggleVisible}
+                        onFocus={onFocus}
                         menuId={menuId}
                         onMenu={onMenu}
                         drop={drop}
@@ -123,7 +125,7 @@ function LayerTree ({ layers, level = 0, activeId, onSelect, collapsed, onToggle
 }
 
 export function LayerManger () {
-    const { layers, activeId, collapsed, openLayer, startEditing, deleteLayer, toggleFolder, toggleVisible, moveLayer } = useLayers()
+    const { layers, activeId, collapsed, openLayer, startEditing, deleteLayer, toggleFolder, toggleVisible, focusLayer, moveLayer } = useLayers()
     // { id, anchor }: capa con el menú abierto y el botón elipsis que lo abrió
     const [menu, setMenu] = useState(null)
     // Capa que se está por borrar, a la espera de confirmación
@@ -188,6 +190,7 @@ export function LayerManger () {
                         collapsed={collapsed}
                         onToggle={toggleFolder}
                         onToggleVisible={toggleVisible}
+                        onFocus={focusLayer}
                         menuId={menu?.id}
                         onMenu={toggleMenu}
                         drop={drop}

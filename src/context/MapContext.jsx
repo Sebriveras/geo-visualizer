@@ -37,3 +37,25 @@ export function useCursorLocation (enabled = true) {
 
     return enabled ? location : null
 }
+
+// Punto del trazado del perfil de elevación sobre el que está el cursor en la gráfica ({ lng, lat } o null);
+// el mapa lo dibuja como un marcador sobre la línea.
+let profileHover = null
+const profileHoverListeners = new Set()
+
+export function setProfileHover (location) {
+    profileHover = location
+    profileHoverListeners.forEach((listener) => listener(location))
+}
+
+export function useProfileHover () {
+    const [location, setLocation] = useState(profileHover)
+
+    useEffect(() => {
+        setLocation(profileHover)
+        profileHoverListeners.add(setLocation)
+        return () => profileHoverListeners.delete(setLocation)
+    }, [])
+
+    return location
+}

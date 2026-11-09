@@ -29,11 +29,15 @@ export function DropdownMenu ({ anchor, onClose, class: className = '', style, c
         }
         document.addEventListener('mousedown', onPointerDown)
         document.addEventListener('keydown', onKeyDown)
+        // El scroll dentro del propio menú (listas largas) no lo cierra
+        const onScroll = (event) => {
+            if (!menuRef.current.contains(event.target)) onClose()
+        }
         window.addEventListener('resize', onClose)
-        window.addEventListener('scroll', onClose, true)
+        window.addEventListener('scroll', onScroll, true)
         return () => {
             window.removeEventListener('resize', onClose)
-            window.removeEventListener('scroll', onClose, true)
+            window.removeEventListener('scroll', onScroll, true)
             document.removeEventListener('mousedown', onPointerDown)
             document.removeEventListener('keydown', onKeyDown)
         }

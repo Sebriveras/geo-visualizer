@@ -17,7 +17,7 @@ const AUTO_EDIT_POINTS = { point: 1, line: 2, polygon: 3 }
 const MIN_POINTS = { point: 1, line: 2, polygon: 3 }
 
 // Las mediciones siempre van en negro
-const MEASURE_COLOR = '#0f172b'
+const MEASURE_COLOR = '#FF5303'
 
 const LayersContext = createContext(null)
 

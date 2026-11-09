@@ -104,7 +104,7 @@ export function ImageCarousel ({ images, onAdd, onRemove }) {
             {removing && (
                 <ConfirmDialog
                     title="Eliminar imagen"
-                    message={`¿Deseas eliminar la imagen ${removing.name}?`}
+                    message={<>¿Deseas eliminar la imagen <b class="font-semibold">{removing.name}</b>?</>}
                     onCancel={() => setRemoving(null)}
                     onConfirm={() => {
                         onRemove(removing.id)

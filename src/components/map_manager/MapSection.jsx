@@ -12,7 +12,7 @@ import buffer from "@turf/buffer"
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN
 
-// Satelital con calles y relieve; vista inicial en la zona del diseño, en 2D (sin inclinar ni rotar), aunque se puede inclinar
+// Satelital con calles y relieve 3D; vista inicial en la zona del diseño, en 2D (sin inclinar ni rotar), aunque se puede inclinar
 const MAP_OPTIONS = {
     style: 'mapbox://styles/mapbox/satellite-streets-v12',
     center: [-77.9425, 0.5525],

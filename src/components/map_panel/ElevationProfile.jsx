@@ -10,6 +10,8 @@ const HEIGHT = 240
 const PAD = { top: 28, right: 6, bottom: 44, left: 78 }
 const TICKS = 4
 const LINE = '#5ab0e0'
+// Relleno bajo la curva (con opacidad), igual al color de las mediciones y del trazado del perfil en el mapa
+const FILL = '#FF5303'
 
 const number = (value, decimals) => value.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
 
@@ -85,7 +87,7 @@ export function ElevationProfile ({ points }) {
                 )
             })}
 
-            <path d={area} fill={LINE} fill-opacity="0.2" />
+            <path d={area} fill={FILL} fill-opacity="0.2" />
             <path d={line} fill="none" stroke={LINE} stroke-width="2" stroke-linejoin="round" />
 
             {[0, 0.5, 1].map((fraction) => (

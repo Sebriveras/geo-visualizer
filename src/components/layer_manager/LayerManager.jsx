@@ -2,11 +2,11 @@ import { Fragment } from 'preact'
 import { useRef, useState } from 'preact/hooks'
 import { DragDropProvider, DragOverlay, KeyboardSensor, PointerSensor, useDraggable } from '@dnd-kit/react'
 import { PointerActivationConstraints } from '@dnd-kit/dom'
-import { DoorOpen, Folder, MapPin, Pencil, Spline, Trash2, TreePine, UtilityPole, VectorSquare } from 'lucide-preact'
+import { DoorOpen, Folder, FolderInput, MapPin, Pencil, Spline, Trash2, TreePine, UtilityPole, VectorSquare } from 'lucide-preact'
 import { Layer } from './Layer'
 import { LayersActionPanel } from './LayersActionPanel'
 import { LayerHeader } from './LayerHeader'
-import { ConfirmDialog } from '../dialog/ConfirmDialog'
+import { useLayerActions } from './useLayerActions'
 import { DropdownMenu, MenuDivider, MenuItem } from '../menu/DropdownMenu'
 import { useLayers } from '../../context/LayersContext'
 
@@ -125,11 +125,10 @@ function LayerTree ({ layers, level = 0, activeId, onSelect, collapsed, onToggle
 }
 
 export function LayerManger () {
-    const { layers, activeId, collapsed, openLayer, startEditing, deleteLayer, toggleFolder, toggleVisible, focusLayer, moveLayer } = useLayers()
+    const { layers, activeId, collapsed, openLayer, startEditing, toggleFolder, toggleVisible, focusLayer, moveLayer } = useLayers()
     // { id, anchor }: capa con el menú abierto y el botón elipsis que lo abrió
     const [menu, setMenu] = useState(null)
-    // Capa que se está por borrar, a la espera de confirmación
-    const [deleting, setDeleting] = useState(null)
+    const { canMove, askMove, askDelete, dialogs } = useLayerActions()
 
     // Arrastre desde el grip: `drop` es el destino bajo el puntero y `draggedId` la capa en movimiento
     const [draggedId, setDraggedId] = useState(null)
@@ -216,24 +215,13 @@ export function LayerManger () {
             {menu && (
                 <DropdownMenu anchor={menu.anchor} onClose={() => setMenu(null)}>
                     <MenuItem icon={Pencil} onClick={() => runAction(startEditing)}>Editar</MenuItem>
+                    <MenuItem icon={FolderInput} disabled={!canMove(flat.find(({ layer }) => layer.id === menu.id).layer)} onClick={() => runAction((id) => askMove(flat.find(({ layer }) => layer.id === id).layer))}>Mover a carpeta</MenuItem>
                     <MenuDivider/>
-                    <MenuItem icon={Trash2} tone="danger" onClick={() => runAction((id) => setDeleting(flat.find(({ layer }) => layer.id === id).layer))}>Borrar</MenuItem>
+                    <MenuItem icon={Trash2} tone="danger" onClick={() => runAction((id) => askDelete(flat.find(({ layer }) => layer.id === id).layer))}>Borrar</MenuItem>
                 </DropdownMenu>
             )}
 
-            {deleting && (
-                <ConfirmDialog
-                    title={deleting.children ? 'Eliminar carpeta' : 'Eliminar capa'}
-                    message={deleting.children?.length > 0
-                        ? `¿Deseas eliminar la carpeta ${deleting.name} y todo su contenido?`
-                        : `¿Deseas eliminar ${deleting.children ? 'la carpeta' : 'la capa'} ${deleting.name}?`}
-                    onCancel={() => setDeleting(null)}
-                    onConfirm={() => {
-                        deleteLayer(deleting.id)
-                        setDeleting(null)
-                    }}
-                />
-            )}
+            {dialogs}
         </div>
     )
 }

@@ -53,7 +53,7 @@ function FolderPanel({ layer, editing }){
 
     return(
         <div class={PANEL_CLASS}>
-            <Header icon={Folder} name={name} editing={editing} onNameInput={setName} onClose={() => closePanel(draft)}/>
+            <Header icon={Folder} layer={layer} name={name} editing={editing} onNameInput={setName} onClose={() => closePanel(draft)}/>
             <div class={BODY_CLASS}>
                 <Observation
                     editing={editing}
@@ -118,7 +118,7 @@ function ShapePanel({ layer, mode }){
 
     return(
         <div class={PANEL_CLASS}>
-            <Header icon={isLine ? Spline : VectorSquare} name={name} editing={editing} onNameInput={setName} onClose={() => closePanel(draft)} onUndo={mode !== 'view' ? undo : undefined} canUndo={canUndo}/>
+            <Header icon={isLine ? Spline : VectorSquare} layer={layer} name={name} editing={editing} onNameInput={setName} onClose={() => closePanel(draft)} onUndo={mode !== 'view' ? undo : undefined} canUndo={canUndo}/>
             <div class={BODY_CLASS}>
                 {mode !== 'draw' && (
                     <>
@@ -201,7 +201,7 @@ function PointPanel({ layer, mode }){
 
     return(
         <div class={PANEL_CLASS}>
-            <Header icon={MapPin} name={name} editing={editing} options={!editing} onNameInput={setName} onClose={() => closePanel(draft)}/>
+            <Header icon={MapPin} layer={layer} name={name} editing={editing} options={!editing} onNameInput={setName} onClose={() => closePanel(draft)}/>
             <div class={BODY_CLASS}>
                 {mode !== 'draw' && (
                     <>

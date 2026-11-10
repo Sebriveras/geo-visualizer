@@ -13,17 +13,26 @@ import { WAYBACK_ATTRIBUTION, WAYBACK_MAX_ZOOM, tileTemplate } from "../map_pane
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN
 
-// Satelital con calles y relieve 3D; vista inicial en la zona del diseño, en 2D (sin inclinar ni rotar), aunque se puede inclinar
+// Satelital con calles y relieve 3D; vista inicial amplia (zoom 4.5: Sudamérica y alrededores, centrada sobre la zona del diseño), en 2D (sin inclinar ni rotar), aunque se puede inclinar
 const MAP_OPTIONS = {
     style: 'mapbox://styles/mapbox/satellite-streets-v12',
     center: [-77.9425, 0.5525],
-    zoom: 15.5,
+    zoom: 4.5,
     pitch: 0,
     bearing: 0,
     maxPitch: 80,
     antialias: true
 }
 const TERRAIN_EXAGGERATION = 1.3
+
+// Píxeles que puede moverse el cursor entre pulsar y soltar para que siga contando como clic (si se pasa, Mapbox lo toma como arrastre y
+// desplaza el mapa). Al marcar puntos con rapidez la mano aún va en camino al soltar, así que mientras se traza se admite más margen:
+// DRAWING_CLICK_TOLERANCE en general y QUICK_CLICK_TOLERANCE durante los primeros QUICK_PRESS_MS de una pulsación (un clic rápido).
+// Si se mantiene pulsado más tiempo, vuelve a la tolerancia normal y arrastrar desplaza el mapa como siempre.
+const CLICK_TOLERANCE = 3
+const DRAWING_CLICK_TOLERANCE = 10
+const QUICK_CLICK_TOLERANCE = 60
+const QUICK_PRESS_MS = 250
 
 // Grosor del trazo (px) y opacidad del relleno de las formas que no los traen (la medición); las capas llevan los suyos
 const DEFAULT_WIDTH = 1.5
@@ -321,6 +330,51 @@ export function MapSection(){
         map.getSource(BUFFERS).setData({ type: 'FeatureCollection', features: bufferFeatures(mapShapes) })
         map.getSource(HANDLES).setData({ type: 'FeatureCollection', features: handleFeatures(mapShapes) })
     }, [ready, mapShapes, placingPoints, extendingLine, cursor])
+
+    // Mientras se traza: más tolerancia al clic y sin zoom por doble clic, para que marcar puntos con rapidez no desplace ni acerque el mapa.
+    // Mapbox solo permite fijar la tolerancia al crear el mapa, así que se ajusta en sus manejadores de gestos (API interna: si cambia, no hace nada).
+    useEffect(() => {
+        if (!ready) return
+        const map = mapRef.current
+        const drawing = placingPoints || insertingPoints
+
+        const setTolerance = (value) => map.handlers?._handlers?.forEach(({ handler }) => {
+            if (handler && typeof handler._clickTolerance === 'number') handler._clickTolerance = value
+        })
+
+        setTolerance(drawing ? DRAWING_CLICK_TOLERANCE : CLICK_TOLERANCE)
+        if (!drawing) {
+            map.doubleClickZoom.enable()
+            return
+        }
+        map.doubleClickZoom.disable()
+
+        let timers = []
+        const clear = () => { timers.forEach(clearTimeout); timers = [] }
+        // Un clic rápido admite mucho movimiento; pasado QUICK_PRESS_MS pulsado, es un arrastre normal
+        const onDown = () => {
+            clear()
+            setTolerance(QUICK_CLICK_TOLERANCE)
+            timers.push(setTimeout(() => setTolerance(DRAWING_CLICK_TOLERANCE), QUICK_PRESS_MS))
+        }
+        // El clic llega justo después de soltar y usa la tolerancia vigente: se restablece un instante más tarde
+        const onUp = () => {
+            clear()
+            timers.push(setTimeout(() => setTolerance(DRAWING_CLICK_TOLERANCE), 50))
+        }
+
+        map.on('mousedown', onDown)
+        map.on('touchstart', onDown)
+        window.addEventListener('mouseup', onUp)
+        window.addEventListener('touchend', onUp)
+        return () => {
+            clear()
+            map.off('mousedown', onDown)
+            map.off('touchstart', onDown)
+            window.removeEventListener('mouseup', onUp)
+            window.removeEventListener('touchend', onUp)
+        }
+    }, [ready, placingPoints, insertingPoints])
 
     // Imagen histórica elegida: se dibuja sobre el satélite actual, bajo las calles, etiquetas y geometrías
     useEffect(() => {

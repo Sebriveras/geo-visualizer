@@ -92,7 +92,7 @@ function LayerTree ({ layers, level = 0, activeId, onSelect, collapsed, onToggle
                 <DraggableLayer
                     id={layer.id}
                     name={layer.name}
-                    count={isFolder ? '0' : ''}
+                    count={isFolder ? String(layer.children.length) : ''}
                     level={level}
                     checked={layer.visible}
                     onCheckedChange={() => onToggleVisible(layer.id)}
@@ -205,7 +205,7 @@ export function LayerManger () {
                                 key={layer.id}
                                 id={layer.id}
                                 name={layer.name}
-                                count={layer.children ? '0' : ''}
+                                count={layer.children ? String(layer.children.length) : ''}
                                 checked={layer.visible}
                                 onCheckedChange={() => toggleVisible(layer.id)}
                                 icon={layerIcon(layer)}
@@ -237,7 +237,7 @@ export function LayerManger () {
                     {dragged && (
                         <Layer
                             name={dragged.name}
-                            count={dragged.children ? '0' : ''}
+                            count={dragged.children ? String(dragged.children.length) : ''}
                             checked={dragged.visible}
                             icon={layerIcon(dragged)}
                             active={activeId === dragged.id}

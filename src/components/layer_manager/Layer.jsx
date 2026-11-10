@@ -23,7 +23,7 @@ export function Layer ({ id, name = 'Layer', count = '##', level = 0, active = f
                     onClick()
                 }
             }}
-            class={`group relative flex h-7 w-full cursor-pointer items-center gap-1 py-1 pl-2 pr-3 ${background} ${dragging ? '*:invisible' : ''} ${overlay ? 'pointer-events-none' : ''}`}
+            class={`group relative flex h-7 w-full cursor-pointer select-none items-center gap-1 py-1 pl-2 pr-3 ${background} ${dragging ? '*:invisible' : ''} ${overlay ? 'pointer-events-none' : ''}`}
         >
             <span
                 ref={gripRef}

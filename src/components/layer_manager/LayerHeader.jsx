@@ -4,7 +4,7 @@ import { GhostButton } from '../buttons/GhostButton'
 // Solo visual: botón de volver y nombre del proyecto
 export function LayerHeader ({ title = 'COLLAGT3' }){
     return(
-        <div class="flex h-13 w-full shrink-0 items-center gap-2 bg-slate-50 px-2">
+        <div class="flex h-13 w-80 shrink-0 items-center gap-2 bg-slate-50 px-2">
             <GhostButton size="sm" iconSize={14} leadingIcon={ArrowLeft} aria-label="Volver" title="Volver">
                 {null}
             </GhostButton>

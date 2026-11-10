@@ -531,17 +531,23 @@ export function LayersProvider ({ children }) {
         setPanel(null)
     }
 
+    // Escape cierra lo que esté abierto: la medición, el panel de la capa (igual que su ✕) o las imágenes históricas.
+    // Se ignora si hay un menú, lista o diálogo abierto (Escape solo cierra a ese). Escucha en captura para ver el DOM antes de que ellos se cierren.
     useEffect(() => {
-        if (!pending && !measure) return
+        if (!pending && !measure && !panel && !historyOpen) return
 
         const onKeyDown = (event) => {
-            if (event.key !== 'Escape') return
+            if (event.key !== 'Escape' || event.defaultPrevented) return
+            // En el filtro de capas con texto, Escape solo lo limpia
+            if (event.target instanceof HTMLInputElement && event.target.getAttribute('role') === 'searchbox' && event.target.value !== '') return
+            if (document.querySelector('[role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"]')) return
             if (measure) setMeasure(null)
-            else closePanel(draftRef.current)
+            else if (pending || panel) closePanel(draftRef.current)
+            else closeHistory()
         }
-        window.addEventListener('keydown', onKeyDown)
-        return () => window.removeEventListener('keydown', onKeyDown)
-    }, [pending, measure, panel, layers])
+        window.addEventListener('keydown', onKeyDown, true)
+        return () => window.removeEventListener('keydown', onKeyDown, true)
+    }, [pending, measure, panel, historyOpen, layers])
 
     // Abrir un panel de capa o una medición cierra las imágenes históricas
     useEffect(() => {

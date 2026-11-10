@@ -5,7 +5,6 @@ import { PointerActivationConstraints } from '@dnd-kit/dom'
 import { DoorOpen, Folder, FolderInput, MapPin, Pencil, Spline, Trash2, TreePine, UtilityPole, VectorSquare } from 'lucide-preact'
 import { Layer } from './Layer'
 import { LayersActionPanel } from './LayersActionPanel'
-import { LayerHeader } from './LayerHeader'
 import { useLayerActions } from './useLayerActions'
 import { DropdownMenu, MenuDivider, MenuItem } from '../menu/DropdownMenu'
 import { useLayers } from '../../context/LayersContext'
@@ -127,7 +126,8 @@ function LayerTree ({ layers, level = 0, activeId, onSelect, collapsed, onToggle
     })
 }
 
-export function LayerManger () {
+// collapsed: oculta el panel de capas (filtro, acciones y árbol) deslizándolo; el título vive aparte, en la fila superior
+export function LayerManger ({ collapsed: sidebarCollapsed = false }) {
     const { layers, activeId, collapsed, openLayer, startEditing, toggleFolder, toggleVisible, focusLayer, moveLayer } = useLayers()
     // { id, anchor }: capa con el menú abierto y el botón elipsis que lo abrió
     const [menu, setMenu] = useState(null)
@@ -178,8 +178,8 @@ export function LayerManger () {
     }
 
     return (
-        <div class="flex h-full w-80 shrink-0 flex-col">
-            <LayerHeader/>
+        <div class={`h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-out motion-reduce:transition-none ${sidebarCollapsed ? 'w-0' : 'w-80'}`} inert={sidebarCollapsed}>
+        <div class="flex h-full w-80 flex-col">
             <LayersActionPanel query={query} onQuery={setQuery}/>
 
             <DragDropProvider
@@ -258,6 +258,7 @@ export function LayerManger () {
             )}
 
             {dialogs}
+        </div>
         </div>
     )
 }

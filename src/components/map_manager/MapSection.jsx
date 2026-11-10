@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks"
+import { ChevronLeft, ChevronRight } from "lucide-preact"
 import { h, render } from "preact"
 import mapboxgl from "mapbox-gl"
 import "mapbox-gl/dist/mapbox-gl.css"
@@ -189,7 +190,7 @@ function addMapContent (map) {
     })
 }
 
-export function MapSection(){
+export function MapSection({ sidebarCollapsed = false, onToggleSidebar }){
     const { placingPoints, insertingPoints, extendingLine, pointCount, mapClick, movePoint, beginMove, mapShapes, openLayer, panel, historyRelease } = useLayers()
     const { setMap } = useMap()
     const containerRef = useRef(null)
@@ -218,6 +219,10 @@ export function MapSection(){
         map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'bottom-right')
         map.addControl(new mapboxgl.GeolocateControl({ trackUserLocation: false }), 'bottom-right')
         map.addControl(new mapboxgl.ScaleControl({ unit: 'metric' }), 'bottom-left')
+
+        // Mapbox no observa su contenedor: al ocultar o mostrar el panel de capas hay que avisarle del nuevo tamaño (el centro se mantiene)
+        const resizeObserver = new ResizeObserver(() => map.resize())
+        resizeObserver.observe(containerRef.current)
 
         map.on('style.load', () => {
             addMapContent(map)
@@ -301,6 +306,7 @@ export function MapSection(){
                 paint(null, element)
             })
             markersRef.current.clear()
+            resizeObserver.disconnect()
             map.remove()
             mapRef.current = null
             setMap(null)
@@ -470,6 +476,19 @@ export function MapSection(){
             )}
             <FloatingSection/>
             <InfoSection/>
+
+            {onToggleSidebar && (
+                <button
+                    type="button"
+                    aria-label={sidebarCollapsed ? 'Mostrar capas' : 'Ocultar capas'}
+                    title={sidebarCollapsed ? 'Mostrar capas' : 'Ocultar capas'}
+                    aria-expanded={!sidebarCollapsed}
+                    onClick={onToggleSidebar}
+                    class="absolute left-0 top-1/2 z-10 flex -translate-y-1/2 cursor-pointer items-center justify-center rounded-r-lg bg-slate-100 py-4 pl-0.5 pr-1 text-[#2c2039] hover:bg-slate-200"
+                >
+                    {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+                </button>
+            )}
         </div>
     )
 }

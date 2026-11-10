@@ -3,7 +3,7 @@ import { Palette, X } from 'lucide-preact'
 import { GhostButton } from '../buttons/GhostButton'
 import { ValueDialog } from '../dialog/ValueDialog'
 
-const ITEM_CLASS = 'flex h-10 min-w-px flex-1 items-center justify-center gap-1.5 overflow-clip rounded-md border-[1.5px] px-2 text-sm text-slate-700'
+const ITEM_CLASS = 'flex h-8 min-w-px flex-1 items-center justify-center gap-1.5 overflow-clip rounded-md border-[1.5px] px-2 text-sm text-slate-700'
 const SELECTED_CLASS = 'border-[#7c33dc] bg-[#f3e8ff]'
 
 // Selector de valores predefinidos con la opción de ingresar uno personalizado (botón de la paleta).

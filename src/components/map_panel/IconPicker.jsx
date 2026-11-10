@@ -33,9 +33,9 @@ export function IconPicker ({ label = 'Iconos', value = DEFAULT_ICON, onChange }
                             aria-label={iconLabel}
                             title={iconLabel}
                             onClick={() => onChange(id)}
-                            class={`flex size-10 shrink-0 cursor-pointer items-center justify-center overflow-clip rounded-md border-[1.5px] ${selected ? 'border-[#7c33dc] bg-[#f3e8ff]' : 'border-transparent hover:bg-slate-100'}`}
+                            class={`flex h-8 min-w-px flex-1 cursor-pointer items-center justify-center rounded-md border-[1.5px] ${selected ? 'border-[#7c33dc] bg-[#f3e8ff]' : 'border-transparent hover:bg-slate-100'}`}
                         >
-                            <Icon class="shrink-0" />
+                            <Icon class="size-10 shrink-0" />
                         </button>
                     )
                 })}

@@ -230,6 +230,9 @@ export function LayersProvider ({ children }) {
     const [measure, setMeasure] = useState(null)
     // Deshacer de la forma que se crea o edita: estados anteriores de sus puntos (el último = el más reciente)
     const [history, setHistory] = useState({ layerId: null, stack: [] })
+    // Imágenes históricas: panel abierto y versión elegida ({ id, year, url }; null = la imagen actual del mapa)
+    const [historyOpen, setHistoryOpen] = useState(false)
+    const [historyRelease, setHistoryRelease] = useState(null)
     // Borrador del panel en edición, para poder conservarlo si se cambia de capa
     const draftRef = useRef(null)
 
@@ -298,6 +301,7 @@ export function LayersProvider ({ children }) {
 
         const base = settleCurrent()
         setMeasure(null)
+        closeHistory()
         const parentId = targetParentId(base, activeId)
         const shape = {
             id: crypto.randomUUID(),
@@ -336,7 +340,23 @@ export function LayersProvider ({ children }) {
 
         setLayers(settleCurrent())
         setPanel(null)
+        closeHistory()
         setMeasure({ id: 'measure', type, points: [], ...measureOf(type, []) })
+    }
+
+    const closeHistory = () => {
+        setHistoryOpen(false)
+        setHistoryRelease(null)
+    }
+
+    // Las imágenes históricas no conviven con otras herramientas: abrirlas cierra el trazado, la medición o el panel abiertos
+    const toggleHistory = () => {
+        if (historyOpen) return closeHistory()
+
+        setLayers(settleCurrent())
+        setMeasure(null)
+        setPanel(null)
+        setHistoryOpen(true)
     }
 
     // "Volver a medir": descarta los puntos y empieza la misma medición de nuevo
@@ -523,6 +543,11 @@ export function LayersProvider ({ children }) {
         return () => window.removeEventListener('keydown', onKeyDown)
     }, [pending, measure, panel, layers])
 
+    // Abrir un panel de capa o una medición cierra las imágenes históricas
+    useEffect(() => {
+        if (panel || measure) closeHistory()
+    }, [panel, measure])
+
     const panelLayer = !panel ? null : pending?.id === panel.layerId ? pending : findNode(layers, panel.layerId)
 
     const value = {
@@ -533,7 +558,7 @@ export function LayersProvider ({ children }) {
         panelLayer,
         // Herramienta de dibujo en curso: 'point' | 'line' | 'polygon' | null
         // Herramienta de dibujo en curso (incluye 'measure')
-        activeTool: measure ? (measure.type === 'profile' ? 'profile' : 'measure') : pending?.type ?? null,
+        activeTool: measure ? (measure.type === 'profile' ? 'profile' : 'measure') : pending?.type ?? (historyOpen ? 'history' : null),
         measure,
         placingPoints: Boolean(measure) || (Boolean(pending) && panel?.mode === 'draw'),
         // Con una línea o polígono en edición, un clic en el mapa agrega vértices
@@ -560,6 +585,11 @@ export function LayersProvider ({ children }) {
             movable: panel?.layerId === shape.id && panel.mode === 'edit'
         })).concat(measure ? [{ id: measure.id, type: measure.type, points: measure.points, color: MEASURE_COLOR, handles: true, movable: false }] : []),
         setPreview,
+        historyOpen,
+        historyRelease,
+        setHistoryRelease,
+        toggleHistory,
+        closeHistory,
         startMeasure,
         restartMeasure,
         movePoint,

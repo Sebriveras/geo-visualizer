@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks'
-import { ChevronDown, CircleGauge, EllipsisVertical, MapPin, Minus, Mountain, Ruler, Spline, VectorSquare } from 'lucide-preact'
+import { ChevronDown, CircleGauge, EllipsisVertical, History, MapPin, Minus, Mountain, Ruler, Spline, VectorSquare } from 'lucide-preact'
 import { GhostButton } from '../buttons/GhostButton'
 import { DropdownMenu, MenuItem } from '../menu/DropdownMenu'
 import { useLayers } from '../../context/LayersContext'
@@ -33,7 +33,7 @@ function IconButton ({ label, icon, trailingIcon, disabled = false, active = fal
 }
 
 export function MapActionPanel () {
-    const { activeTool, measure, startShape, startMeasure } = useLayers()
+    const { activeTool, measure, startShape, startMeasure, toggleHistory } = useLayers()
     // Botón de medir que abrió el menú; null = cerrado
     const [measureAnchor, setMeasureAnchor] = useState(null)
 
@@ -58,6 +58,7 @@ export function MapActionPanel () {
                     }}
                 />
                 <IconButton label="Perfil de elevación" icon={Mountain} active={activeTool === 'profile'} onClick={() => startMeasure('profile')} />
+                <IconButton label="Imágenes históricas" icon={History} active={activeTool === 'history'} onClick={toggleHistory} />
             </div>
 
             <IconButton label="Más opciones" icon={EllipsisVertical} />

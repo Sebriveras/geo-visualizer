@@ -9,6 +9,7 @@ import { setCursorLocation, useMap, useProfileHover } from "../../context/MapCon
 import { findIcon } from "../map_panel/IconPicker"
 import { DEFAULT_BUFFER_OPACITY } from "../map_panel/BufferPicker"
 import buffer from "@turf/buffer"
+import { WAYBACK_ATTRIBUTION, WAYBACK_MAX_ZOOM, tileTemplate } from "../map_panel/wayback"
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN
 
@@ -31,6 +32,7 @@ const DEFAULT_OPACITY = 0.15
 const SHAPES = 'kmz-shapes'
 const BUFFERS = 'kmz-buffers'
 const PROFILE_HOVER = 'kmz-profile-hover'
+const WAYBACK = 'kmz-wayback'
 const HANDLES = 'kmz-handles'
 
 // El icono (40×40) se apoya con su base sobre la coordenada: su centro queda 10 px por encima
@@ -179,7 +181,7 @@ function addMapContent (map) {
 }
 
 export function MapSection(){
-    const { placingPoints, insertingPoints, extendingLine, pointCount, mapClick, movePoint, beginMove, mapShapes, openLayer, panel } = useLayers()
+    const { placingPoints, insertingPoints, extendingLine, pointCount, mapClick, movePoint, beginMove, mapShapes, openLayer, panel, historyRelease } = useLayers()
     const { setMap } = useMap()
     const containerRef = useRef(null)
     const mapRef = useRef(null)
@@ -234,7 +236,8 @@ export function MapSection(){
         map.on('click', (event) => {
             if (justDraggedRef.current) return
             if (map.queryRenderedFeatures(event.point, { layers: [HANDLES] }).length > 0) return
-            if (!latest.current.placingPoints && openShapeAt(event.point)) return
+            // Trazando o editando una línea/polígono, el clic agrega un vértice aunque caiga sobre otra geometría
+            if (!latest.current.placingPoints && !latest.current.insertingPoints && openShapeAt(event.point)) return
             latest.current.mapClick(toLngLat(event.lngLat))
         })
 
@@ -318,6 +321,25 @@ export function MapSection(){
         map.getSource(BUFFERS).setData({ type: 'FeatureCollection', features: bufferFeatures(mapShapes) })
         map.getSource(HANDLES).setData({ type: 'FeatureCollection', features: handleFeatures(mapShapes) })
     }, [ready, mapShapes, placingPoints, extendingLine, cursor])
+
+    // Imagen histórica elegida: se dibuja sobre el satélite actual, bajo las calles, etiquetas y geometrías
+    useEffect(() => {
+        if (!ready) return
+        const map = mapRef.current
+
+        if (!historyRelease) {
+            if (map.getLayer(WAYBACK)) map.removeLayer(WAYBACK)
+            if (map.getSource(WAYBACK)) map.removeSource(WAYBACK)
+            return
+        }
+
+        const tiles = [tileTemplate(historyRelease)]
+        if (map.getSource(WAYBACK)) return map.getSource(WAYBACK).setTiles(tiles)
+
+        map.addSource(WAYBACK, { type: 'raster', tiles, tileSize: 256, maxzoom: WAYBACK_MAX_ZOOM, attribution: WAYBACK_ATTRIBUTION })
+        const above = map.getStyle().layers.find((layer) => layer.type !== 'raster' && layer.type !== 'background')?.id
+        map.addLayer({ id: WAYBACK, type: 'raster', source: WAYBACK }, above)
+    }, [ready, historyRelease])
 
     // Marcador del perfil de elevación
     useEffect(() => {

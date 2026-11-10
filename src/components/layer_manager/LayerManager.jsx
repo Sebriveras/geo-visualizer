@@ -27,6 +27,9 @@ function flatten (layers, collapsed, level = 0) {
     ])
 }
 
+// Sin tildes ni mayúsculas, para que "poligono" encuentre "Polígono"
+const normalize = (text) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
 const contains = (layer, id) => Boolean(layer.children?.some((child) => child.id === id || contains(child, id)))
 
 // Destino del soltado según la posición vertical del puntero sobre las filas.
@@ -128,6 +131,8 @@ export function LayerManger () {
     const { layers, activeId, collapsed, openLayer, startEditing, toggleFolder, toggleVisible, focusLayer, moveLayer } = useLayers()
     // { id, anchor }: capa con el menú abierto y el botón elipsis que lo abrió
     const [menu, setMenu] = useState(null)
+    // Texto del filtro de capas
+    const [query, setQuery] = useState('')
     const { canMove, askMove, askDelete, dialogs } = useLayerActions()
 
     // Arrastre desde el grip: `drop` es el destino bajo el puntero y `draggedId` la capa en movimiento
@@ -137,6 +142,11 @@ export function LayerManger () {
     const treeRef = useRef(null)
 
     const flat = flatten(layers, collapsed)
+    // Todas las capas, también las de carpetas cerradas: los resultados del filtro y el menú las necesitan
+    const all = flatten(layers, new Set())
+    const needle = normalize(query.trim())
+    // Con filtro activo: lista plana de las capas cuyo nombre coincide (sin sus carpetas), sin arrastre
+    const results = needle ? all.filter(({ layer }) => normalize(layer.name).includes(needle)).map(({ layer }) => layer) : null
     const dragged = draggedId ? flat.find(({ layer }) => layer.id === draggedId)?.layer : null
 
     const updateDrop = (event) => {
@@ -170,7 +180,7 @@ export function LayerManger () {
     return (
         <div class="flex h-full w-80 shrink-0 flex-col">
             <LayerHeader/>
-            <LayersActionPanel/>
+            <LayersActionPanel query={query} onQuery={setQuery}/>
 
             <DragDropProvider
                 sensors={[PointerSensor.configure({ activationConstraints: [new PointerActivationConstraints.Distance({ value: 4 })] }), KeyboardSensor]}
@@ -182,6 +192,31 @@ export function LayerManger () {
                 onDragEnd={endDrag}
             >
                 <div ref={treeRef} class="min-h-0 flex-1 overflow-y-auto py-2">
+                    {results ? (
+                        results.length === 0 ? (
+                            <div class="flex h-full items-center justify-center">
+                                <div class="flex w-53.5 flex-col gap-1 text-center">
+                                    <p class="truncate text-base font-semibold leading-normal text-slate-700">Sin resultados</p>
+                                    <p class="text-sm text-slate-600">No hay resultados disponibles para esta búsqueda</p>
+                                </div>
+                            </div>
+                        ) : results.map((layer) => (
+                            <Layer
+                                key={layer.id}
+                                id={layer.id}
+                                name={layer.name}
+                                count={layer.children ? '0' : ''}
+                                checked={layer.visible}
+                                onCheckedChange={() => toggleVisible(layer.id)}
+                                icon={layerIcon(layer)}
+                                active={activeId === layer.id}
+                                onClick={() => openLayer(layer.id)}
+                                onDoubleClick={() => focusLayer(layer.id)}
+                                menuOpen={menu?.id === layer.id}
+                                onMenu={(trigger) => toggleMenu(layer.id, trigger)}
+                            />
+                        ))
+                    ) : (
                     <LayerTree
                         layers={layers}
                         activeId={activeId}
@@ -195,6 +230,7 @@ export function LayerManger () {
                         drop={drop}
                         lastId={flat[flat.length - 1]?.layer.id}
                     />
+                    )}
                 </div>
 
                 <DragOverlay dropAnimation={null}>
@@ -215,9 +251,9 @@ export function LayerManger () {
             {menu && (
                 <DropdownMenu anchor={menu.anchor} onClose={() => setMenu(null)}>
                     <MenuItem icon={Pencil} onClick={() => runAction(startEditing)}>Editar</MenuItem>
-                    <MenuItem icon={FolderInput} disabled={!canMove(flat.find(({ layer }) => layer.id === menu.id).layer)} onClick={() => runAction((id) => askMove(flat.find(({ layer }) => layer.id === id).layer))}>Mover a carpeta</MenuItem>
+                    <MenuItem icon={FolderInput} disabled={!canMove(all.find(({ layer }) => layer.id === menu.id).layer)} onClick={() => runAction((id) => askMove(all.find(({ layer }) => layer.id === id).layer))}>Mover a carpeta</MenuItem>
                     <MenuDivider/>
-                    <MenuItem icon={Trash2} tone="danger" onClick={() => runAction((id) => askDelete(flat.find(({ layer }) => layer.id === id).layer))}>Borrar</MenuItem>
+                    <MenuItem icon={Trash2} tone="danger" onClick={() => runAction((id) => askDelete(all.find(({ layer }) => layer.id === id).layer))}>Borrar</MenuItem>
                 </DropdownMenu>
             )}
 

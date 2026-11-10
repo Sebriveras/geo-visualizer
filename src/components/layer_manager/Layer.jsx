@@ -29,7 +29,7 @@ export function Layer ({ id, name = 'Layer', count = '##', level = 0, active = f
                 ref={gripRef}
                 data-grip
                 onClick={(event) => event.stopPropagation()}
-                class={`flex size-3 shrink-0 touch-none items-center justify-center text-slate-500 ${gripRef ? 'cursor-grab' : ''} ${overlay ? '' : 'opacity-0 group-hover:opacity-100'}`}
+                class={`flex size-3 shrink-0 touch-none items-center justify-center text-slate-500 ${gripRef ? 'cursor-grab' : ''} ${overlay ? '' : gripRef ? 'opacity-0 group-hover:opacity-100' : 'invisible'}`}
             >
                 <GripVertical size={12} />
             </span>

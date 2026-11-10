@@ -176,7 +176,7 @@ function ShapePanel({ layer, mode }){
 // Punto. mode: 'draw' (esperando el clic) · 'edit' · 'view'
 // Ubicación y elevación se muestran siempre (al trazar siguen al cursor; al editar, al punto mientras se mueve)
 function PointPanel({ layer, mode }){
-    const { saveLayer, editLayer, closePanel, setPreview, draftRef } = useLayers()
+    const { saveLayer, editLayer, closePanel, setPreview, draftRef, undo, canUndo } = useLayers()
     const [name, setName] = useState(layer.name)
     const [observation, setObservation] = useState(layer.observation)
     const [icon, setIcon] = useState(layer.icon)
@@ -201,7 +201,7 @@ function PointPanel({ layer, mode }){
 
     return(
         <div class={PANEL_CLASS}>
-            <Header icon={MapPin} layer={layer} name={name} editing={editing} options={!editing} onNameInput={setName} onClose={() => closePanel(draft)}/>
+            <Header icon={MapPin} layer={layer} name={name} editing={editing} options={!editing} onNameInput={setName} onClose={() => closePanel(draft)} onUndo={mode !== 'view' ? undo : undefined} canUndo={canUndo}/>
             <div class={BODY_CLASS}>
                 {mode !== 'draw' && (
                     <>

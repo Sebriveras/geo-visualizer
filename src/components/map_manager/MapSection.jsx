@@ -428,6 +428,11 @@ export function MapSection({ sidebarCollapsed = false, onToggleSidebar }){
                     .addTo(map)
                 marker.on('dragstart', () => latest.current.beginMove(id))
                 marker.on('drag', () => latest.current.movePoint(id, 0, toLngLat(marker.getLngLat())))
+                // Soltar un arrastre genera un clic (sobre el icono o sobre el mapa): no debe contar como clic
+                marker.on('dragend', () => {
+                    justDraggedRef.current = true
+                    setTimeout(() => { justDraggedRef.current = false }, 50)
+                })
                 entry = { marker, element }
                 markers.set(id, entry)
             }
@@ -440,6 +445,7 @@ export function MapSection({ sidebarCollapsed = false, onToggleSidebar }){
             entry.element.style.cursor = movable ? 'move' : clickable ? 'pointer' : ''
             entry.element.onclick = (event) => {
                 event.stopPropagation()
+                if (justDraggedRef.current) return
                 latest.current.openLayer(id)
             }
             paint(h(findIcon(icon).component, {}), entry.element)

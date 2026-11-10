@@ -9,7 +9,8 @@ const SELECTED_CLASS = 'border-[#7c33dc] bg-[#f3e8ff]'
 // Selector de valores predefinidos con la opción de ingresar uno personalizado (botón de la paleta).
 // options: [{ value, label?, text?, swatch }] · defaultValue: la opción a la que vuelve la ✕ del valor personalizado
 // customLabel(value): texto del valor personalizado · customSwatch(value): su muestra
-// dialog: { title, label, placeholder, parse, format, component?, props? } (props: extras para el componente del diálogo)
+// dialog: { title, label, placeholder, parse, format, prefill?, component?, props? } (props: extras para el componente del diálogo;
+// prefill: el campo del diálogo arranca con el valor vigente aunque sea uno predefinido, no solo con uno personalizado)
 export function Picker ({ label, options, value, defaultValue, onChange, customLabel = '', customSwatch, dialog }) {
     const [dialogOpen, setDialogOpen] = useState(false)
     const isCustom = !options.some((option) => option.value === value)
@@ -71,7 +72,7 @@ export function Picker ({ label, options, value, defaultValue, onChange, customL
                     title={dialog.title}
                     label={dialog.label}
                     placeholder={dialog.placeholder}
-                    initial={isCustom ? dialog.format(value) : ''}
+                    initial={isCustom || dialog.prefill ? dialog.format(value) : ''}
                     current={value}
                     {...dialog.props}
                     parse={dialog.parse}

@@ -24,34 +24,46 @@
   }
 }
 
-/* Selector de color del diálogo de color personalizado (react-colorful): cuadro de saturación de 180 px y barra de
-   matiz de 24 px a ancho completo. Con el prefijo del diálogo se impone a los estilos que la librería inyecta. */
+/* Selectores de los diálogos de color y opacidad (react-colorful), dentro de un marco de 16 px: cuadro de saturación de 180 px y
+   barra de matiz de 36 px separados 12 px, con esquinas redondeadas y marcadores de 28 px con borde blanco.
+   Con el prefijo del diálogo se impone a los estilos que la librería inyecta. */
 [role="dialog"] .react-colorful {
   width: 100%;
-  height: 204px;
+  height: 228px;
 }
 [role="dialog"] .react-colorful__saturation {
   border: 0;
-  border-radius: 0;
+  border-radius: 8px;
 }
 [role="dialog"] .react-colorful__hue {
-  height: 24px;
-  border-radius: 0;
+  height: 36px;
+  margin-top: 12px;
+  border-radius: 8px;
 }
 [role="dialog"] .react-colorful__pointer {
-  width: 20px;
-  height: 20px;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  border: 6px solid #fff;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.25);
 }
 
-/* Opacidad personalizada: de RgbaColorPicker solo se deja la barra de alpha, de 40 px a ancho completo */
+/* Opacidad personalizada: de RgbaColorPicker solo se deja la barra de alpha, de 36 px */
 [role="dialog"] .alpha-only {
-  height: 40px;
+  height: 36px;
 }
 [role="dialog"] .alpha-only .react-colorful__saturation,
 [role="dialog"] .alpha-only .react-colorful__hue {
   display: none;
 }
 [role="dialog"] .alpha-only .react-colorful__alpha {
-  height: 40px;
-  border-radius: 0;
+  height: 36px;
+  border-radius: 8px;
+}
+
+/* Cuadrícula de transparencia (cuadros de 8 px) bajo las muestras de opacidad */
+.checker {
+  background-color: #fff;
+  background-image: repeating-conic-gradient(#d9d9d9 0 25%, #fff 0 50%);
+  background-size: 16px 16px;
 }

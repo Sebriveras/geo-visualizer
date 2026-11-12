@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks'
-import { ChevronDown, CircleGauge, EllipsisVertical, History, MapPin, Minus, Mountain, Ruler, Spline, VectorSquare } from 'lucide-preact'
+import { ChevronDown, CircleGauge, EllipsisVertical, History, MapPin, Minus, Mountain, Ruler, Search, Spline, Upload, VectorSquare } from 'lucide-preact'
 import { GhostButton } from '../buttons/GhostButton'
 import { Tooltip } from '../tooltip/Tooltip'
 import { DropdownMenu, MenuItem } from '../menu/DropdownMenu'
@@ -62,6 +62,21 @@ export function MapActionPanel () {
                 />
                 <IconButton label="Perfil de elevación" icon={Mountain} active={activeTool === 'profile'} onClick={() => startMeasure('profile')} />
                 <IconButton label="Imágenes históricas" icon={History} active={activeTool === 'history'} onClick={toggleHistory} />
+
+                {/* Solo visual por ahora: ni el campo ni el botón de cargar hacen nada */}
+                <div class="flex min-w-px flex-1 items-center justify-end px-4">
+                    <div class="flex h-8 w-90.25 min-w-0 max-w-full items-stretch">
+                        <label class="flex min-w-0 flex-1 items-center gap-2 rounded-l-lg border border-slate-300 bg-white px-3 text-sm text-slate-400 focus-within:border-slate-600">
+                            <Search size={14} class="shrink-0" />
+                            <input type="text" aria-label="Buscar un terreno" placeholder="Busca un terreno..." class="min-w-px flex-1 bg-transparent leading-normal text-slate-700 outline-none placeholder:text-slate-400" />
+                        </label>
+                        <Tooltip label="Cargar">
+                            <button type="button" aria-label="Cargar" class="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-r-lg border-y border-r border-slate-300 bg-white text-[#2c2039] hover:bg-[#00185614] active:bg-[#0018561f]">
+                                <Upload size={16} />
+                            </button>
+                        </Tooltip>
+                    </div>
+                </div>
             </div>
 
             <IconButton label="Más opciones" icon={EllipsisVertical} />

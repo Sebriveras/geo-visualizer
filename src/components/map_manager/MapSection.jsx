@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-preact"
 import { h, render } from "preact"
 import mapboxgl from "mapbox-gl"
 import "mapbox-gl/dist/mapbox-gl.css"
+import { CoordinatePopover } from "./CoordinatePopover"
 import { MapControls } from "./MapControls"
 import { InfoSection } from "./InfoSection"
 import { FloatingSection } from "./FloatingSection"
@@ -193,7 +194,7 @@ function addMapContent (map) {
 }
 
 export function MapSection({ sidebarCollapsed = false, onToggleSidebar }){
-    const { placingPoints, insertingPoints, extendingLine, pointCount, mapClick, movePoint, beginMove, mapShapes, openLayer, panel, historyRelease } = useLayers()
+    const { placingPoints, insertingPoints, extendingLine, pointCount, mapClick, movePoint, beginMove, mapShapes, openLayer, panel, historyRelease, activeTool } = useLayers()
     const { setMap } = useMap()
     const containerRef = useRef(null)
     const mapRef = useRef(null)
@@ -206,10 +207,14 @@ export function MapSection({ sidebarCollapsed = false, onToggleSidebar }){
     // Posición del cursor sobre el mapa mientras se traza: { x, y (píxeles), lng, lat }
     const [cursor, setCursor] = useState(null)
     const profileHover = useProfileHover()
+    // Clic derecho al ubicar el primer punto: tarjeta para escribir sus coordenadas ({ x, y } del clic) o null
+    const [coordinateInput, setCoordinateInput] = useState(null)
+    // Se ubica el primer punto de «Crear punto» (permite elegirlo con clic derecho + coordenadas)
+    const placingFirstPoint = activeTool === 'point' && placingPoints && pointCount === 0
 
     // Los listeners del mapa se registran una sola vez; leen siempre lo último desde aquí
     const latest = useRef({})
-    latest.current = { mapClick, movePoint, beginMove, placingPoints, insertingPoints, extendingLine, openLayer, panel }
+    latest.current = { mapClick, movePoint, beginMove, placingPoints, insertingPoints, extendingLine, openLayer, panel, placingFirstPoint }
 
     useEffect(() => {
         if (!TOKEN) return
@@ -288,6 +293,14 @@ export function MapSection({ sidebarCollapsed = false, onToggleSidebar }){
             latest.current.mapClick(toLngLat(event.lngLat))
         })
 
+        // Clic derecho al ubicar el primer punto: en lugar del menú del navegador, la tarjeta de coordenadas
+        map.on('contextmenu', (event) => {
+            if (!latest.current.placingFirstPoint) return
+            event.originalEvent.preventDefault()
+            setCursor(null)
+            setCoordinateInput({ x: event.point.x, y: event.point.y })
+        })
+
         map.on('mousemove', (event) => {
             if (dragRef.current) return latest.current.movePoint(dragRef.current.id, dragRef.current.index, toLngLat(event.lngLat))
             setCursorLocation(toLngLat(event.lngLat))
@@ -350,6 +363,18 @@ export function MapSection({ sidebarCollapsed = false, onToggleSidebar }){
             setReady(false)
         }
     }, [])
+
+    useEffect(() => {
+        if (!placingFirstPoint) setCoordinateInput(null)
+    }, [placingFirstPoint])
+
+    // Confirmar las coordenadas: crea el punto ahí (pasa a edición) y centra el mapa en él, con zoom 15 como mínimo
+    const acceptCoordinates = ({ lat, lng }) => {
+        const map = mapRef.current
+        setCoordinateInput(null)
+        mapClick({ lng, lat })
+        map.easeTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 15) })
+    }
 
     // Al terminar de trazar no queda cursor que seguir
     useEffect(() => {
@@ -509,14 +534,15 @@ export function MapSection({ sidebarCollapsed = false, onToggleSidebar }){
                 </p>
             )}
 
-            {placingPoints && pointCount === 0 && cursor && (
+            {placingPoints && pointCount === 0 && cursor && !coordinateInput && (
                 <p
                     class="pointer-events-none absolute z-10 whitespace-nowrap rounded-lg bg-slate-800 px-3 py-1.5 text-sm text-white"
                     style={{ left: `${cursor.x + 10}px`, top: `${cursor.y + 10}px` }}
                 >
-                    Clic para poner un punto
+                    {activeTool === 'point' ? 'Clic izquierdo punto, clic derecho coordenadas' : 'Clic para poner un punto'}
                 </p>
             )}
+            {coordinateInput && <CoordinatePopover x={coordinateInput.x} y={coordinateInput.y} onAccept={acceptCoordinates} onClose={() => setCoordinateInput(null)} />}
             <FloatingSection/>
             <InfoSection/>
             <MapControls/>

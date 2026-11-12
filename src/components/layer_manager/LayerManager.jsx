@@ -248,6 +248,17 @@ export function LayerManger ({ collapsed: sidebarCollapsed = false }) {
                                 onMenu={(trigger) => toggleMenu(layer.id, trigger)}
                             />
                         ))
+                    ) : layers.length === 0 ? (
+                        // Sin capas creadas (el mensaje habla de cargar KMZ, que aún no existe: solo informa)
+                        <div class="flex h-full items-center justify-center">
+                            <div class="flex w-53.5 flex-col items-center gap-2 text-center">
+                                <div class="flex w-full flex-col items-center gap-1 text-slate-700">
+                                    <Layers size={18} />
+                                    <p class="w-full truncate text-base font-semibold leading-normal">Sin capas</p>
+                                </div>
+                                <p class="text-sm text-slate-600">No hay capas creadas, arrastra y suelta o clic para cargar archivos KMZ o crea capas en el editor</p>
+                            </div>
+                        </div>
                     ) : (
                     <LayerTree
                         layers={layers}

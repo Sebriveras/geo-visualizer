@@ -5,50 +5,60 @@ import { LayerManger } from "./components/layer_manager/LayerManager"
 import { LayerHeader } from "./components/layer_manager/LayerHeader"
 import { MapActionPanel } from "./components/map_manager/MapActionPanel"
 import { MapManager } from "./components/map_manager/MapManager"
+import { Sidebar } from "./components/sidebar/Sidebar"
+import { Header } from "./components/header/Header"
 
-const STORAGE_KEY = 'kmz.sidebarCollapsed'
-
-// El panel de capas puede ocultarse con la pestaña del mapa; se recuerda entre visitas
-function useSidebarCollapsed () {
-  const [collapsed, setCollapsed] = useState(() => {
+// Un interruptor (oculto / visible) que se recuerda entre visitas
+function usePersistedFlag (key) {
+  const [on, setOn] = useState(() => {
     try {
-      return localStorage.getItem(STORAGE_KEY) === '1'
+      return localStorage.getItem(key) === '1'
     } catch {
       return false
     }
   })
 
   const toggle = () => {
-    const next = !collapsed
-    setCollapsed(next)
+    const next = !on
+    setOn(next)
     try {
-      localStorage.setItem(STORAGE_KEY, next ? '1' : '0')
+      localStorage.setItem(key, next ? '1' : '0')
     } catch {}
   }
 
-  return [collapsed, toggle]
+  return [on, toggle]
 }
 
 export function App() {
-  const [sidebarCollapsed, toggleSidebar] = useSidebarCollapsed()
+  // El panel de capas se oculta con la pestaña del mapa; la barra lateral de iconos, con el botón del encabezado
+  const [sidebarCollapsed, toggleSidebar] = usePersistedFlag('kmz.sidebarCollapsed')
+  const [menuHidden, toggleMenu] = usePersistedFlag('kmz.menuHidden')
 
   return (
     <MapProvider>
     <LayersProvider>
       <div class="flex flex-col h-screen overflow-hidden">
+        <Header menuHidden={menuHidden} onToggleMenu={toggleMenu}/>
 
-        <div class="flex flex-col flex-1 min-h-0 w-full">{/*Content*/}
-          {/* Fila superior: título del proyecto y herramientas; siempre visible */}
-          <div class="flex w-full shrink-0">
-            <LayerHeader/>
-            <MapActionPanel/>
+        <div class="flex flex-row flex-1 min-h-0 w-full">{/*Content*/}
+          {/* Barra lateral de iconos (se desliza al ocultarla) */}
+          <div class={`h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-out motion-reduce:transition-none ${menuHidden ? 'w-0' : 'w-13'}`} inert={menuHidden}>
+            <Sidebar/>
           </div>
 
-          {/* Fila inferior: capas (colapsable) y mapa */}
-          <div class="flex flex-1 min-h-0 w-full">
-            <LayerManger collapsed={sidebarCollapsed}/>
+          <div class="flex flex-col flex-1 min-w-0 min-h-0">
+            {/* Fila superior: título del proyecto y herramientas; siempre visible */}
+            <div class="flex w-full shrink-0">
+              <LayerHeader/>
+              <MapActionPanel/>
+            </div>
 
-            <MapManager sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar}/>
+            {/* Fila inferior: capas (colapsable) y mapa */}
+            <div class="flex flex-1 min-h-0 w-full">
+              <LayerManger collapsed={sidebarCollapsed}/>
+
+              <MapManager sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar}/>
+            </div>
           </div>
         </div>
       </div>

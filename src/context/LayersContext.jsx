@@ -101,6 +101,26 @@ function moveNode (layers, id, targetId, placement) {
     return insert(rest)
 }
 
+// Mueve varias capas a la vez al mismo destino, conservando su orden visual. Si una carpeta y algo de su interior van juntos,
+// solo se mueve la carpeta (su contenido va con ella). Devuelve las capas resultantes.
+function moveNodes (layers, ids, targetId, placement) {
+    const order = []
+    const walk = (list) => list.forEach((layer) => {
+        order.push(layer.id)
+        if (layer.children) walk(layer.children)
+    })
+    walk(layers)
+
+    const top = ids
+        .filter((id) => findNode(layers, id))
+        .filter((id) => !ids.some((other) => other !== id && findNode(layers, other)?.children && findNode(findNode(layers, other).children, id)))
+        .sort((a, b) => order.indexOf(a) - order.indexOf(b))
+
+    // Cada capa se inserta junto al destino: antes y al final conservan el orden; después y como primer hijo lo invierten
+    const sequence = placement === 'after' || placement === 'first-child' ? [...top].reverse() : top
+    return sequence.reduce((current, id) => moveNode(current, id, targetId, placement), layers)
+}
+
 function uniqueName (siblings, baseName, excludeId) {
     const taken = new Set(siblings.filter((layer) => layer.id !== excludeId).map((layer) => layer.name))
     if (!taken.has(baseName)) return baseName
@@ -217,6 +237,8 @@ export function LayersProvider ({ children }) {
     const { map } = useMap()
     const [layers, setLayers] = useState([])
     const [activeId, setActiveId] = useState(null)
+    // Selección múltiple (2 o más capas, con Cmd/Ctrl o Mayús + clic): mientras exista no hay panel en el mapa. Vacía = sin selección múltiple
+    const [selection, setSelection] = useState([])
     const [collapsed, setCollapsed] = useState(new Set())
     // { layerId, mode: 'draw' | 'edit' | 'view' } mientras el panel del mapa está abierto
     const [panel, setPanel] = useState(null)
@@ -459,9 +481,20 @@ export function LayersProvider ({ children }) {
             next = commitInto(layers, panel.layerId, draftRef.current)
         }
         setLayers(next)
+        setSelection([])
         setActiveId(id)
         setPanel({ layerId: id, mode })
     }
+
+    // Selecciona varias capas (ids.length !== 1) y cierra el panel: guarda lo que se estuviera editando
+    const selectMany = (ids) => {
+        setLayers(settleCurrent())
+        setMeasure(null)
+        setPanel(null)
+        setActiveId(null)
+        setSelection(ids)
+    }
+    const clearSelection = () => setSelection([])
 
     // Doble clic en una capa: centra el mapa en su geometría (en una carpeta, en todo lo que contiene).
     // Deja libre el lado derecho, donde se abre el panel.
@@ -518,6 +551,23 @@ export function LayersProvider ({ children }) {
         if (panel && !findNode(next, panel.layerId)) setPanel(null)
     }
 
+    // Borra varias capas a la vez (la selección múltiple)
+    const deleteLayers = (ids) => {
+        const base = settleCurrent()
+        const next = ids.reduce((current, id) => removeNode(current, id), base)
+
+        setLayers(next)
+        setSelection([])
+        if (activeId && !findNode(next, activeId)) setActiveId(null)
+        if (panel && !findNode(next, panel.layerId)) setPanel(null)
+    }
+
+    // Mueve varias capas a la vez, como moveLayer; soltar dentro de una carpeta cerrada la abre
+    const moveLayers = (ids, targetId, placement) => {
+        setLayers(moveNodes(layers, ids, targetId, placement))
+        if (targetId !== null && placement.endsWith('-child') && collapsed.has(targetId)) toggleFolder(targetId)
+    }
+
     const editLayer = (id) => setPanel({ layerId: id, mode: 'edit' })
 
     // Una geometría nueva solo existe al pulsar Guardar: salir del trazado o de su primera edición la descarta.
@@ -534,7 +584,7 @@ export function LayersProvider ({ children }) {
     // Escape cierra lo que esté abierto: la medición, el panel de la capa (igual que su ✕) o las imágenes históricas.
     // Se ignora si hay un menú, lista o diálogo abierto (Escape solo cierra a ese). Escucha en captura para ver el DOM antes de que ellos se cierren.
     useEffect(() => {
-        if (!pending && !measure && !panel && !historyOpen) return
+        if (!pending && !measure && !panel && !historyOpen && selection.length === 0) return
 
         const onKeyDown = (event) => {
             if (event.key !== 'Escape' || event.defaultPrevented) return
@@ -543,15 +593,21 @@ export function LayersProvider ({ children }) {
             if (document.querySelector('[role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"]')) return
             if (measure) setMeasure(null)
             else if (pending || panel) closePanel(draftRef.current)
+            else if (selection.length > 0) clearSelection()
             else closeHistory()
         }
         window.addEventListener('keydown', onKeyDown, true)
         return () => window.removeEventListener('keydown', onKeyDown, true)
-    }, [pending, measure, panel, historyOpen, layers])
+    }, [pending, measure, panel, historyOpen, layers, selection])
 
     // Abrir un panel de capa o una medición cierra las imágenes históricas
     useEffect(() => {
         if (panel || measure) closeHistory()
+    }, [panel, measure])
+
+    // Un panel o una medición abiertos cierran la selección múltiple
+    useEffect(() => {
+        if ((panel || measure) && selection.length > 0) setSelection([])
     }, [panel, measure])
 
     const panelLayer = !panel ? null : pending?.id === panel.layerId ? pending : findNode(layers, panel.layerId)
@@ -602,6 +658,11 @@ export function LayersProvider ({ children }) {
         units,
         setUnit,
         draftRef,
+        selection,
+        selectMany,
+        clearSelection,
+        deleteLayers,
+        moveLayers,
         openLayer,
         focusLayer,
         startEditing,

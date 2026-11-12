@@ -2,7 +2,7 @@ import { Fragment } from 'preact'
 import { useRef, useState } from 'preact/hooks'
 import { DragDropProvider, DragOverlay, KeyboardSensor, PointerSensor, useDraggable } from '@dnd-kit/react'
 import { PointerActivationConstraints } from '@dnd-kit/dom'
-import { DoorOpen, Folder, FolderInput, MapPin, Pencil, Spline, Trash2, TreePine, UtilityPole, VectorSquare } from 'lucide-preact'
+import { DoorOpen, Folder, FolderInput, Layers, MapPin, Pencil, Spline, Trash2, TreePine, UtilityPole, VectorSquare } from 'lucide-preact'
 import { Layer } from './Layer'
 import { LayersActionPanel } from './LayersActionPanel'
 import { useLayerActions } from './useLayerActions'
@@ -35,7 +35,7 @@ const contains = (layer, id) => Boolean(layer.children?.some((child) => child.id
 // Carpeta: borde superior = antes · centro = dentro · (cerrada) borde inferior = después.
 // Carpeta abierta: todo lo que no sea el borde superior entra como primer hijo.
 // Devuelve { targetId, placement } · null = sin destino válido
-function resolveDrop (flat, collapsed, dragged, container, y) {
+function resolveDrop (flat, collapsed, draggedLayers, container, y) {
     const rows = [...container.querySelectorAll('[data-layer-id]')]
     if (rows.length === 0) return null
 
@@ -51,7 +51,7 @@ function resolveDrop (flat, collapsed, dragged, container, y) {
     if (!row) return null
 
     const id = row.dataset.layerId
-    if (id === dragged.id || contains(dragged, id)) return null
+    if (draggedLayers.some((dragged) => id === dragged.id || contains(dragged, id))) return null
 
     const rect = row.getBoundingClientRect()
     const ratio = (y - rect.top) / rect.height
@@ -81,7 +81,7 @@ function DraggableLayer (props) {
     return <Layer {...props} rowRef={ref} gripRef={handleRef} dragging={isDragSource}/>
 }
 
-function LayerTree ({ layers, level = 0, activeId, onSelect, collapsed, onToggle, onToggleVisible, onFocus, menuId, onMenu, drop, lastId }) {
+function LayerTree ({ layers, level = 0, activeId, selection, onSelect, collapsed, onToggle, onToggleVisible, onFocus, menuId, onMenu, drop, lastId }) {
     return layers.map((layer) => {
         const isFolder = Boolean(layer.children)
         const isCollapsed = collapsed.has(layer.id)
@@ -96,10 +96,10 @@ function LayerTree ({ layers, level = 0, activeId, onSelect, collapsed, onToggle
                     checked={layer.visible}
                     onCheckedChange={() => onToggleVisible(layer.id)}
                     icon={layerIcon(layer)}
-                    active={activeId === layer.id}
+                    active={activeId === layer.id || selection.includes(layer.id)}
                     expanded={isFolder ? !isCollapsed : undefined}
                     onToggle={isFolder ? () => onToggle(layer.id) : undefined}
-                    onClick={() => onSelect(layer.id)}
+                    onClick={(event) => onSelect(layer.id, event)}
                     onDoubleClick={() => onFocus(layer.id)}
                     menuOpen={menuId === layer.id}
                     onMenu={(trigger) => onMenu(layer.id, trigger)}
@@ -110,6 +110,7 @@ function LayerTree ({ layers, level = 0, activeId, onSelect, collapsed, onToggle
                         layers={layer.children}
                         level={level + 1}
                         activeId={activeId}
+                        selection={selection}
                         onSelect={onSelect}
                         collapsed={collapsed}
                         onToggle={onToggle}
@@ -128,15 +129,15 @@ function LayerTree ({ layers, level = 0, activeId, onSelect, collapsed, onToggle
 
 // collapsed: oculta el panel de capas (filtro, acciones y árbol) deslizándolo; el título vive aparte, en la fila superior
 export function LayerManger ({ collapsed: sidebarCollapsed = false }) {
-    const { layers, activeId, collapsed, openLayer, startEditing, toggleFolder, toggleVisible, focusLayer, moveLayer } = useLayers()
+    const { layers, activeId, selection, collapsed, openLayer, selectMany, clearSelection, startEditing, toggleFolder, toggleVisible, focusLayer, moveLayers } = useLayers()
     // { id, anchor }: capa con el menú abierto y el botón elipsis que lo abrió
     const [menu, setMenu] = useState(null)
     // Texto del filtro de capas
     const [query, setQuery] = useState('')
     const { canMove, askMove, askDelete, dialogs } = useLayerActions()
 
-    // Arrastre desde el grip: `drop` es el destino bajo el puntero y `draggedId` la capa en movimiento
-    const [draggedId, setDraggedId] = useState(null)
+    // Arrastre desde el grip: `drop` es el destino bajo el puntero y `draggedIds` las capas en movimiento (la selección entera si se agarra una seleccionada)
+    const [draggedIds, setDraggedIds] = useState([])
     const [drop, setDrop] = useState(null)
     const dropRef = useRef(null)
     const treeRef = useRef(null)
@@ -147,22 +148,52 @@ export function LayerManger ({ collapsed: sidebarCollapsed = false }) {
     const needle = normalize(query.trim())
     // Con filtro activo: lista plana de las capas cuyo nombre coincide (sin sus carpetas), sin arrastre
     const results = needle ? all.filter(({ layer }) => normalize(layer.name).includes(needle)).map(({ layer }) => layer) : null
-    const dragged = draggedId ? flat.find(({ layer }) => layer.id === draggedId)?.layer : null
+    const dragged = draggedIds.length > 0 ? all.find(({ layer }) => layer.id === draggedIds[0])?.layer : null
 
+    // Ancla del rango con Mayús + clic: la última capa pulsada
+    const anchorRef = useRef(null)
+    // Capas en el orden en que se ven (con filtro, los resultados)
+    const visibleIds = results ? results.map((layer) => layer.id) : flat.map(({ layer }) => layer.id)
+
+    // Clic en una fila: normal = una capa (abre su panel) · Cmd/Ctrl = suma o quita · Mayús = rango desde la última pulsada.
+    // Con 2 o más capas no hay panel en el mapa.
+    const selectRow = (id, event) => {
+        const toggle = event?.metaKey || event?.ctrlKey
+        const range = event?.shiftKey
+        if (!toggle && !range) {
+            anchorRef.current = id
+            return openLayer(id)
+        }
+
+        const current = selection.length > 0 ? selection : activeId ? [activeId] : []
+        let next
+        if (range && visibleIds.includes(anchorRef.current ?? activeId)) {
+            const from = visibleIds.indexOf(anchorRef.current ?? activeId)
+            const to = visibleIds.indexOf(id)
+            next = visibleIds.slice(Math.min(from, to), Math.max(from, to) + 1)
+        } else {
+            next = current.includes(id) ? current.filter((other) => other !== id) : [...current, id]
+            anchorRef.current = id
+        }
+
+        if (next.length === 1) openLayer(next[0])
+        else selectMany(next)
+    }
     const updateDrop = (event) => {
         const source = event.operation.source
-        const layer = source && flat.find((item) => item.layer.id === source.id)?.layer
-        const next = layer ? resolveDrop(flat, collapsed, layer, treeRef.current, event.operation.position.current.y) : null
+        const ids = source ? (selection.includes(source.id) ? selection : [source.id]) : []
+        const layersDragged = ids.map((id) => all.find((item) => item.layer.id === id)?.layer).filter(Boolean)
+        const next = layersDragged.length > 0 ? resolveDrop(flat, collapsed, layersDragged, treeRef.current, event.operation.position.current.y) : null
         dropRef.current = next
         setDrop(next)
     }
 
     const endDrag = (event) => {
         const { source } = event.operation
-        if (!event.canceled && source && dropRef.current) moveLayer(source.id, dropRef.current.targetId, dropRef.current.placement)
+        if (!event.canceled && source && dropRef.current) moveLayers(selection.includes(source.id) ? selection : [source.id], dropRef.current.targetId, dropRef.current.placement)
         dropRef.current = null
         setDrop(null)
-        setDraggedId(null)
+        setDraggedIds([])
     }
 
     const toggleMenu = (id, trigger) => {
@@ -186,12 +217,13 @@ export function LayerManger ({ collapsed: sidebarCollapsed = false }) {
                 sensors={[PointerSensor.configure({ activationConstraints: [new PointerActivationConstraints.Distance({ value: 4 })] }), KeyboardSensor]}
                 onDragStart={(event) => {
                     setMenu(null)
-                    setDraggedId(event.operation.source.id)
+                    const id = event.operation.source.id
+                    setDraggedIds(selection.includes(id) ? selection : [id])
                 }}
                 onDragMove={updateDrop}
                 onDragEnd={endDrag}
             >
-                <div ref={treeRef} class="min-h-0 flex-1 overflow-y-auto py-2">
+                <div ref={treeRef} class="min-h-0 flex-1 overflow-y-auto py-2" onClick={(event) => event.target === event.currentTarget && selection.length > 0 && clearSelection()}>
                     {results ? (
                         results.length === 0 ? (
                             <div class="flex h-full items-center justify-center">
@@ -209,8 +241,8 @@ export function LayerManger ({ collapsed: sidebarCollapsed = false }) {
                                 checked={layer.visible}
                                 onCheckedChange={() => toggleVisible(layer.id)}
                                 icon={layerIcon(layer)}
-                                active={activeId === layer.id}
-                                onClick={() => openLayer(layer.id)}
+                                active={activeId === layer.id || selection.includes(layer.id)}
+                                onClick={(event) => selectRow(layer.id, event)}
                                 onDoubleClick={() => focusLayer(layer.id)}
                                 menuOpen={menu?.id === layer.id}
                                 onMenu={(trigger) => toggleMenu(layer.id, trigger)}
@@ -220,7 +252,8 @@ export function LayerManger ({ collapsed: sidebarCollapsed = false }) {
                     <LayerTree
                         layers={layers}
                         activeId={activeId}
-                        onSelect={openLayer}
+                        selection={selection}
+                        onSelect={selectRow}
                         collapsed={collapsed}
                         onToggle={toggleFolder}
                         onToggleVisible={toggleVisible}
@@ -236,10 +269,11 @@ export function LayerManger ({ collapsed: sidebarCollapsed = false }) {
                 <DragOverlay dropAnimation={null}>
                     {dragged && (
                         <Layer
-                            name={dragged.name}
-                            count={dragged.children ? String(dragged.children.length) : ''}
+                            name={draggedIds.length > 1 ? `${draggedIds.length} Capas seleccionadas` : dragged.name}
+                            count={draggedIds.length > 1 ? '' : dragged.children ? String(dragged.children.length) : ''}
                             checked={dragged.visible}
-                            icon={layerIcon(dragged)}
+                            icon={draggedIds.length > 1 ? Layers : layerIcon(dragged)}
+                            showCheckbox={draggedIds.length <= 1}
                             active={activeId === dragged.id}
                             expanded={dragged.children ? !collapsed.has(dragged.id) : undefined}
                             overlay
@@ -248,14 +282,22 @@ export function LayerManger ({ collapsed: sidebarCollapsed = false }) {
                 </DragOverlay>
             </DragDropProvider>
 
-            {menu && (
-                <DropdownMenu anchor={menu.anchor} onClose={() => setMenu(null)}>
-                    <MenuItem icon={Pencil} onClick={() => runAction(startEditing)}>Editar</MenuItem>
-                    <MenuItem icon={FolderInput} disabled={!canMove(all.find(({ layer }) => layer.id === menu.id).layer)} onClick={() => runAction((id) => askMove(all.find(({ layer }) => layer.id === id).layer))}>Mover a carpeta</MenuItem>
-                    <MenuDivider/>
-                    <MenuItem icon={Trash2} tone="danger" onClick={() => runAction((id) => askDelete(all.find(({ layer }) => layer.id === id).layer))}>Borrar</MenuItem>
-                </DropdownMenu>
-            )}
+            {menu && (() => {
+                // Con varias capas seleccionadas, el menú de una de ellas actúa sobre todas
+                const multiple = selection.length > 1 && selection.includes(menu.id)
+                const targetLayers = multiple
+                    ? selection.map((id) => all.find(({ layer }) => layer.id === id)?.layer).filter(Boolean)
+                    : [all.find(({ layer }) => layer.id === menu.id).layer]
+
+                return (
+                    <DropdownMenu anchor={menu.anchor} onClose={() => setMenu(null)}>
+                        {!multiple && <MenuItem icon={Pencil} onClick={() => runAction(startEditing)}>Editar</MenuItem>}
+                        <MenuItem icon={FolderInput} disabled={!canMove(targetLayers)} onClick={() => runAction(() => askMove(targetLayers))}>Mover a carpeta</MenuItem>
+                        <MenuDivider/>
+                        <MenuItem icon={Trash2} tone="danger" onClick={() => runAction(() => askDelete(targetLayers))}>Borrar</MenuItem>
+                    </DropdownMenu>
+                )
+            })()}
 
             {dialogs}
         </div>

@@ -4,7 +4,7 @@ import { LayerCheckbox } from './LayerCheckbox'
 // Para arrastrar: rowRef/gripRef los entrega useDraggable (el agarre es el grip), `dragging` marca la fila
 // de origen (queda como hueco), `overlay` es la copia que sigue al cursor y `indicator` el destino del soltado:
 // { edge: 'top' | 'bottom', level } = línea entre filas · { inside: true } = dentro de esta carpeta
-export function Layer ({ id, name = 'Layer', count = '##', level = 0, active = false, checked = false, onCheckedChange, icon: Icon, expanded, onToggle, onClick, onDoubleClick, menuOpen = false, onMenu, rowRef, gripRef, dragging = false, overlay = false, indicator }) {
+export function Layer ({ id, name = 'Layer', count = '##', level = 0, active = false, checked = false, onCheckedChange, icon: Icon, expanded, onToggle, onClick, onDoubleClick, menuOpen = false, onMenu, rowRef, gripRef, dragging = false, overlay = false, showCheckbox = true, indicator }) {
     const background = overlay ? (active ? 'bg-blue-50 opacity-80' : 'bg-slate-200 opacity-80') : dragging ? 'bg-white' : indicator?.inside ? 'bg-blue-100 ring-1 ring-inset ring-[#51a2ff]' : active ? 'bg-blue-100' : 'hover:bg-slate-100'
 
     return (
@@ -54,7 +54,7 @@ export function Layer ({ id, name = 'Layer', count = '##', level = 0, active = f
                 </button>
             )}
 
-            <LayerCheckbox checked={checked} onChange={onCheckedChange} />
+            {showCheckbox && <LayerCheckbox checked={checked} onChange={onCheckedChange} />}
 
             <div class="flex min-w-px flex-1 items-center gap-1">
                 {Icon && <Icon size={14} class="shrink-0 text-slate-500" />}

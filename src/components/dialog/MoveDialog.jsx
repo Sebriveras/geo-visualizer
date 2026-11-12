@@ -6,7 +6,8 @@ import { Dialog } from './Dialog'
 
 // Mueve una capa a otra carpeta. folders: [{ value, label }]. El botón Mover se habilita al elegir destino;
 // tras elegirlo el foco pasa a Mover, así que Enter confirma.
-export function MoveDialog ({ layerName, folders, onConfirm, onCancel }) {
+// count > 1: se mueven varias capas (la selección múltiple) y el texto habla de todas
+export function MoveDialog ({ layerName, count = 1, folders, onConfirm, onCancel }) {
     const [target, setTarget] = useState(null)
     const actionsRef = useRef(null)
 
@@ -14,7 +15,9 @@ export function MoveDialog ({ layerName, folders, onConfirm, onCancel }) {
         <Dialog title="Mover a carpeta" onCancel={onCancel}>
             <div class="flex w-full flex-col gap-5 px-6 py-3">
                 <p class="break-words text-center text-base leading-normal text-slate-700">
-                    Selecciona la carpeta a la que quieres mover la capa <b class="font-semibold">{layerName}</b>
+                    Selecciona la carpeta a la que quieres mover {count > 1
+                        ? <>las <b class="font-semibold">{count} capas seleccionadas</b></>
+                        : <>la capa <b class="font-semibold">{layerName}</b></>}
                 </p>
 
                 <SelectField

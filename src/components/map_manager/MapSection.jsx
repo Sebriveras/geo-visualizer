@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-preact"
 import { h, render } from "preact"
 import mapboxgl from "mapbox-gl"
 import "mapbox-gl/dist/mapbox-gl.css"
+import { MapControls } from "./MapControls"
 import { InfoSection } from "./InfoSection"
 import { FloatingSection } from "./FloatingSection"
 import { useLayers } from "../../context/LayersContext"
@@ -22,7 +23,8 @@ const MAP_OPTIONS = {
     pitch: 0,
     bearing: 0,
     maxPitch: 80,
-    antialias: true
+    antialias: true,
+    attributionControl: false
 }
 const TERRAIN_EXAGGERATION = 1.3
 
@@ -216,13 +218,44 @@ export function MapSection({ sidebarCollapsed = false, onToggleSidebar }){
         const map = new mapboxgl.Map({ container: containerRef.current, ...MAP_OPTIONS })
         mapRef.current = map
 
-        map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'bottom-right')
-        map.addControl(new mapboxgl.GeolocateControl({ trackUserLocation: false }), 'bottom-right')
-        map.addControl(new mapboxgl.ScaleControl({ unit: 'metric' }), 'bottom-left')
+        // Brújula, ubicación, zoom y escala son los controles propios (MapControls); aquí solo queda el crédito de Mapbox, junto a su logo
+        map.addControl(new mapboxgl.AttributionControl(), 'bottom-left')
 
         // Mapbox no observa su contenedor: al ocultar o mostrar el panel de capas hay que avisarle del nuevo tamaño (el centro se mantiene)
         const resizeObserver = new ResizeObserver(() => map.resize())
         resizeObserver.observe(containerRef.current)
+
+        // Rueda del mouse pulsada y arrastrada: gira (izquierda/derecha) e inclina (arriba/abajo) el mapa en 3D, con la misma
+        // sensibilidad que el botón derecho de Mapbox. Mapbox solo gira con el botón derecho o Ctrl + clic.
+        const container = map.getCanvasContainer()
+        let orbit = null
+        const startOrbit = (event) => {
+            if (event.button !== 1) return
+            event.preventDefault()
+            orbit = { x: event.clientX, y: event.clientY }
+            container.style.cursor = 'grabbing'
+        }
+        const moveOrbit = (event) => {
+            if (!orbit) return
+            const dx = event.clientX - orbit.x
+            const dy = event.clientY - orbit.y
+            orbit = { x: event.clientX, y: event.clientY }
+            map.jumpTo({
+                bearing: map.getBearing() + dx * 0.8,
+                pitch: Math.min(Math.max(map.getPitch() - dy * 0.5, 0), MAP_OPTIONS.maxPitch)
+            })
+        }
+        const endOrbit = (event) => {
+            if (!orbit || event.button !== 1) return
+            orbit = null
+            container.style.cursor = ''
+        }
+        // Sin esto el navegador abre el desplazamiento automático (o pega, en Linux) al pulsar la rueda
+        const blockAuxClick = (event) => event.button === 1 && event.preventDefault()
+        container.addEventListener('mousedown', startOrbit)
+        container.addEventListener('auxclick', blockAuxClick)
+        window.addEventListener('mousemove', moveOrbit)
+        window.addEventListener('mouseup', endOrbit)
 
         map.on('style.load', () => {
             addMapContent(map)
@@ -307,6 +340,10 @@ export function MapSection({ sidebarCollapsed = false, onToggleSidebar }){
             })
             markersRef.current.clear()
             resizeObserver.disconnect()
+            container.removeEventListener('mousedown', startOrbit)
+            container.removeEventListener('auxclick', blockAuxClick)
+            window.removeEventListener('mousemove', moveOrbit)
+            window.removeEventListener('mouseup', endOrbit)
             map.remove()
             mapRef.current = null
             setMap(null)
@@ -482,6 +519,7 @@ export function MapSection({ sidebarCollapsed = false, onToggleSidebar }){
             )}
             <FloatingSection/>
             <InfoSection/>
+            <MapControls/>
 
             {onToggleSidebar && (
                 <button

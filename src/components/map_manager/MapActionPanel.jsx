@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks'
 import { ChevronDown, CircleGauge, EllipsisVertical, History, MapPin, Minus, Mountain, Ruler, Spline, VectorSquare } from 'lucide-preact'
 import { GhostButton } from '../buttons/GhostButton'
+import { Tooltip } from '../tooltip/Tooltip'
 import { DropdownMenu, MenuItem } from '../menu/DropdownMenu'
 import { useLayers } from '../../context/LayersContext'
 
@@ -12,23 +13,25 @@ function Divider () {
     )
 }
 
-function IconButton ({ label, icon, trailingIcon, disabled = false, active = false, onClick, ...props }) {
+// tooltip: texto de ayuda (por defecto, la etiqueta); `label` queda como nombre accesible del botón
+function IconButton ({ label, tooltip = label, icon, trailingIcon, disabled = false, active = false, onClick, ...props }) {
     return (
-        <GhostButton
-            size="sm"
-            iconSize={14}
-            leadingIcon={icon}
-            trailingIcon={trailingIcon}
-            tone={active ? 'action' : 'primary'}
-            aria-pressed={onClick ? active : undefined}
-            onClick={onClick}
-            disabled={disabled}
-            aria-label={label}
-            title={label}
-            {...props}
-        >
-            {null}
-        </GhostButton>
+        <Tooltip label={tooltip}>
+            <GhostButton
+                size="sm"
+                iconSize={14}
+                leadingIcon={icon}
+                trailingIcon={trailingIcon}
+                tone={active ? 'action' : 'primary'}
+                aria-pressed={onClick ? active : undefined}
+                onClick={onClick}
+                disabled={disabled}
+                aria-label={label}
+                {...props}
+            >
+                {null}
+            </GhostButton>
+        </Tooltip>
     )
 }
 
@@ -40,9 +43,9 @@ export function MapActionPanel () {
     return (
         <div class="flex h-13 w-full items-center gap-2 bg-slate-50 p-2">
             <div class="flex h-full min-w-px flex-1 items-center gap-1">
-                <IconButton label="Punto" icon={MapPin} active={activeTool === 'point'} onClick={() => startShape('point')} />
-                <IconButton label="Línea" icon={Spline} active={activeTool === 'line'} onClick={() => startShape('line')} />
-                <IconButton label="Polígono" icon={VectorSquare} active={activeTool === 'polygon'} onClick={() => startShape('polygon')} />
+                <IconButton label="Punto" tooltip="Crear punto" icon={MapPin} active={activeTool === 'point'} onClick={() => startShape('point')} />
+                <IconButton label="Línea" tooltip="Crear línea" icon={Spline} active={activeTool === 'line'} onClick={() => startShape('line')} />
+                <IconButton label="Polígono" tooltip="Crear polígono" icon={VectorSquare} active={activeTool === 'polygon'} onClick={() => startShape('polygon')} />
                 <Divider />
                 <IconButton
                     label="Medir"

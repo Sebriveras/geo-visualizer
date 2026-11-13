@@ -1,11 +1,15 @@
-import { ChevronDown, ChevronRight, EllipsisVertical, GripVertical } from 'lucide-preact'
+import { ChevronDown, ChevronRight, EllipsisVertical, GripVertical, Image, MessageSquareMore, Shapes } from 'lucide-preact'
 import { LayerCheckbox } from './LayerCheckbox'
 
 // Para arrastrar: rowRef/gripRef los entrega useDraggable (el agarre es el grip), `dragging` marca la fila
 // de origen (queda como hueco), `overlay` es la copia que sigue al cursor y `indicator` el destino del soltado:
 // { edge: 'top' | 'bottom', level } = línea entre filas · { inside: true } = dentro de esta carpeta
-export function Layer ({ id, name = 'Layer', count = '##', level = 0, active = false, checked = false, onCheckedChange, icon: Icon, expanded, onToggle, onClick, onDoubleClick, menuOpen = false, onMenu, rowRef, gripRef, dragging = false, overlay = false, showCheckbox = true, indicator }) {
+export function Layer ({ id, name = 'Layer', count = '##', level = 0, active = false, checked = false, onCheckedChange, icon: Icon, expanded, onToggle, onClick, onDoubleClick, menuOpen = false, onMenu, rowRef, gripRef, dragging = false, overlay = false, showCheckbox = true, indicator, hasImages = false, hasObservation = false }) {
     const background = overlay ? (active ? 'bg-blue-50 opacity-80' : 'bg-slate-200 opacity-80') : dragging ? 'bg-white' : indicator?.inside ? 'bg-blue-100 ring-1 ring-inset ring-[#51a2ff]' : active ? 'bg-blue-100' : 'hover:bg-slate-100'
+
+    // Indicador de contenido: imagen, observación o ambos (shapes)
+    const Extra = hasImages && hasObservation ? Shapes : hasImages ? Image : hasObservation ? MessageSquareMore : null
+    const extraLabel = hasImages && hasObservation ? 'Con imágenes y observación' : hasImages ? 'Con imágenes' : 'Con observación'
 
     return (
         <div
@@ -60,6 +64,8 @@ export function Layer ({ id, name = 'Layer', count = '##', level = 0, active = f
                 {Icon && <Icon size={14} class="shrink-0 text-slate-500" />}
                 <p class="min-w-px flex-1 truncate text-sm text-slate-700">{name}</p>
             </div>
+
+            {Extra && <Extra size={14} aria-label={extraLabel} class="shrink-0 text-slate-500" />}
 
             <span class="shrink-0 text-base text-slate-400">{count}</span>
 

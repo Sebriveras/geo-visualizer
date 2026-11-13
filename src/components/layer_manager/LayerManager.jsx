@@ -18,6 +18,9 @@ const layerIcon = (layer) => {
     return layer.type === 'point' ? POINT_ICONS[layer.icon] ?? MapPin : TYPE_ICONS[layer.type]
 }
 
+// Solo las capas con contenido propio (no las carpetas) muestran el indicador de imágenes u observación
+const extras = (layer) => layer.children ? {} : { hasImages: Boolean(layer.images?.length), hasObservation: Boolean(layer.observation?.trim()) }
+
 // Capas visibles en pantalla, en orden, con su nivel de anidación
 function flatten (layers, collapsed, level = 0) {
     return layers.flatMap((layer) => [
@@ -96,6 +99,7 @@ function LayerTree ({ layers, level = 0, activeId, selection, onSelect, collapse
                     checked={layer.visible}
                     onCheckedChange={() => onToggleVisible(layer.id)}
                     icon={layerIcon(layer)}
+                    {...extras(layer)}
                     active={activeId === layer.id || selection.includes(layer.id)}
                     expanded={isFolder ? !isCollapsed : undefined}
                     onToggle={isFolder ? () => onToggle(layer.id) : undefined}
@@ -241,6 +245,7 @@ export function LayerManger ({ collapsed: sidebarCollapsed = false }) {
                                 checked={layer.visible}
                                 onCheckedChange={() => toggleVisible(layer.id)}
                                 icon={layerIcon(layer)}
+                                {...extras(layer)}
                                 active={activeId === layer.id || selection.includes(layer.id)}
                                 onClick={(event) => selectRow(layer.id, event)}
                                 onDoubleClick={() => focusLayer(layer.id)}
@@ -284,6 +289,7 @@ export function LayerManger ({ collapsed: sidebarCollapsed = false }) {
                             count={draggedIds.length > 1 ? '' : dragged.children ? String(dragged.children.length) : ''}
                             checked={dragged.visible}
                             icon={draggedIds.length > 1 ? Layers : layerIcon(dragged)}
+                            {...(draggedIds.length > 1 ? {} : extras(dragged))}
                             showCheckbox={draggedIds.length <= 1}
                             active={activeId === dragged.id}
                             expanded={dragged.children ? !collapsed.has(dragged.id) : undefined}
